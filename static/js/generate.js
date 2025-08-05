@@ -81,6 +81,7 @@ function showScaleEditor(scaleName) {
 		row.innerHTML = `
 			<input type="number" value="${entry.cat}" class="scale-cat" style="width:60px;" />
 			<input type="color" value="${entry.color}" class="scale-color" />
+			<input type="text" value="${entry.color}" class="scale-color-hex" maxlength="7" />
 			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
 		`;
 		entriesDiv.appendChild(row);
@@ -113,9 +114,22 @@ document.addEventListener("DOMContentLoaded", () => {
 		row.innerHTML = `
 			<input type="number" value="0" class="scale-cat" style="width:60px;" />
 			<input type="color" value="#000000" class="scale-color" />
+			<input type="text" value="#000000" class="scale-color-hex" maxlength="7" />
 			<button type="button" class="remove-scale-entry">X</button>
 		`;
 		entriesDiv.appendChild(row);
+	});
+
+	document.getElementById("scale-entries").addEventListener("input", e => {
+		const target = e.target;
+		if (target.classList.contains("scale-color")) {
+			target.nextElementSibling.value = target.value;
+		} else if (target.classList.contains("scale-color-hex")) {
+			const hexValue = target.value;
+			if (/^#[0-9a-f]{6}$/i.test(hexValue)) {
+				target.previousElementSibling.value = hexValue;
+			}
+		}
 	});
 
 	document.getElementById("scale-entries").addEventListener("click", e => {
@@ -130,10 +144,22 @@ document.addEventListener("DOMContentLoaded", () => {
 			alert("Invalid scale name.");
 			return;
 		}
-		const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => ({
-			cat: Number(div.querySelector(".scale-cat").value),
-			color: div.querySelector(".scale-color").value
-		}));
+
+		const unit = document.getElementById("scale-speed-unit").value;
+
+		const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => {
+			let speed = Number(div.querySelector(".scale-cat").value);
+			
+			// convert speed to knots before saving
+			if (unit === "mph") speed /= 1.15078;
+			else if (unit === "kph") speed /= 1.852;
+
+			return {
+				cat: speed,
+				color: div.querySelector(".scale-color").value
+			};
+		});
+
 		if (entries.length === 0) {
 			alert("Add at least one entry.");
 			return;

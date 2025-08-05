@@ -664,6 +664,24 @@ ion-icon+span {
 	color: var(--foreground-1);
 }
 
+#scale-speed-unit-selector {
+	margin-bottom: .5rem;
+}
+
+#scale-speed-unit-selector label {
+	font-family: "Fira Sans", sans-serif;
+	margin-right: .5rem;
+}
+
+#scale-speed-unit {
+	border-radius: .25rem;
+	padding: 3px;
+	border: 1px solid #ccc;
+	background-color: #fff;
+	color: #000;
+	font-family: 'Roboto Mono', monospace;
+}
+
 #scale-entries {
 	max-height: 20vh;
 	overflow-y: auto;
@@ -681,14 +699,31 @@ ion-icon+span {
 	border-radius: .25rem;
 }
 
-.scale-cat {
+#scale-entries input {
+	margin: 0 1em;
+}
+
+.scale-cat, .scale-color, #scale-name {
 	border: 1px solid #ccc;
 	border-radius: .25rem;
 	padding: 5px;
 	font-family: 'Roboto Mono', monospace;
 	background-color: #fff;
 	color: #000;
+}
+
+.scale-cat {
 	width: 70px;
+}
+
+.scale-color-hex {
+	width: 80px;
+	font-family: 'Roboto Mono', monospace;
+	border: 1px solid #ccc;
+	border-radius: .25rem;
+	padding: 5px;
+	background-color: #fff;
+	color: #000;
 }
 
 .scale-color {
@@ -871,7 +906,7 @@ ion-icon+span {
 		background: #6b7091;
 	}
 
-	.scale-cat, #scale-selector, #scale-name {
+	.scale-cat, #scale-selector, #scale-name, .scale-color-hex, #scale-speed-unit {
 		background-color: #fff;
 		color: #000;
 		border: 1px solid #999;
