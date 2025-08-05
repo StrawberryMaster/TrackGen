@@ -236,6 +236,22 @@
 						Upload custom map:</label>
 					<input type="file" id="custom-map-upload" accept="image/*">
 				</div>
+				<br />
+				<div id="custom-scale-section">
+					<label for="scale-selector">Category scale:</label>
+					<select id="scale-selector">
+						<option value="default">Default</option>
+						<option value="accessible">Accessible</option>
+					</select>
+					<button type="button" id="delete-scale" style="display:none;">Delete scale</button>
+					<div id="scale-editor" style="margin-top:1em;">
+						<h4>Create/edit custom scales</h4>
+						<div id="scale-entries"></div>
+						<button type="button" id="add-scale-entry">Add entry</button>
+						<button type="button" id="save-scale">Save scale</button>
+						<input type="text" id="scale-name" placeholder="Scale name" />
+					</div>
+				</div>
 			</div>
 		</div>
 

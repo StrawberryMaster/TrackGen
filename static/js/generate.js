@@ -1,16 +1,149 @@
 function catToColour(cat = -999, accessible = true) {
-    const colorMap = new Map([
-        [-999, "#C0C0C0"],
-        [-2, accessible ? "#6ec1ea" : "#5EBAFF"],
-        [-1, accessible ? "#4dffff" : "#00FAF4"],
-        [1, accessible ? "#ffffD9" : "#FFFFCC"],
-        [2, accessible ? "#ffd98c" : "#FFE775"],
-        [3, accessible ? "#ff9e59" : "#FFC140"],
-        [4, accessible ? "#ff738a" : "#FF8F20"],
-        [5, accessible ? "#a188fc" : "#FF6060"],
-    ]);
-    return colorMap.get(cat) || "#C0C0C0";
+	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
+	const colorMap = getScaleMap(scaleName);
+	return colorMap.get(cat) || "#C0C0C0";
 }
+
+const SCALE_STORAGE_KEY = "trackgen_custom_scales";
+let customScales = JSON.parse(localStorage.getItem(SCALE_STORAGE_KEY) || "{}");
+let currentScale = "default";
+
+function getScaleList() {
+	return ["default", "accessible", ...Object.keys(customScales)];
+}
+
+function getScaleMap(scaleName) {
+	if (scaleName === "default") {
+		return new Map([
+			[-999, "#C0C0C0"],
+			[-2, "#5EBAFF"],
+			[-1, "#00FAF4"],
+			[1, "#FFFFCC"],
+			[2, "#FFE775"],
+			[3, "#FFC140"],
+			[4, "#FF8F20"],
+			[5, "#FF6060"],
+		]);
+	}
+	if (scaleName === "accessible") {
+		return new Map([
+			[-999, "#C0C0C0"],
+			[-2, "#6ec1ea"],
+			[-1, "#4dffff"],
+			[1, "#ffffD9"],
+			[2, "#ffd98c"],
+			[3, "#ff9e59"],
+			[4, "#ff738a"],
+			[5, "#a188fc"],
+		]);
+	}
+	// custom scale
+	const scale = customScales[scaleName];
+	if (!scale) return getScaleMap("default");
+	const map = new Map();
+	scale.forEach(entry => map.set(Number(entry.cat), entry.color));
+	return map;
+}
+
+function saveCustomScale(name, entries) {
+	customScales[name] = entries;
+	localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
+}
+
+function deleteCustomScale(name) {
+	delete customScales[name];
+	localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
+}
+
+function updateScaleSelector() {
+	const selector = document.getElementById("scale-selector");
+	selector.innerHTML = "";
+	getScaleList().forEach(name => {
+		const opt = document.createElement("option");
+		opt.value = name;
+		opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+		selector.appendChild(opt);
+	});
+	selector.value = currentScale;
+	document.getElementById("delete-scale").style.display =
+		(currentScale !== "default" && currentScale !== "accessible") ? "" : "none";
+}
+
+function showScaleEditor(scaleName) {
+	const editor = document.getElementById("scale-editor");
+	const entriesDiv = document.getElementById("scale-entries");
+	entriesDiv.innerHTML = "";
+	const scale = customScales[scaleName] || [
+		{ cat: -999, color: "#C0C0C0" }
+	];
+	(scale || []).forEach((entry, idx) => {
+		const row = document.createElement("div");
+		row.innerHTML = `
+			<input type="number" value="${entry.cat}" class="scale-cat" style="width:60px;" />
+			<input type="color" value="${entry.color}" class="scale-color" />
+			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
+		`;
+		entriesDiv.appendChild(row);
+	});
+	document.getElementById("scale-name").value = scaleName || "";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+	updateScaleSelector();
+	showScaleEditor("");
+
+	document.getElementById("scale-selector").addEventListener("change", e => {
+		currentScale = e.target.value;
+		updateScaleSelector();
+		showScaleEditor(currentScale !== "default" && currentScale !== "accessible" ? currentScale : "");
+	});
+
+	document.getElementById("delete-scale").addEventListener("click", () => {
+		if (currentScale in customScales) {
+			deleteCustomScale(currentScale);
+			currentScale = "default";
+			updateScaleSelector();
+			showScaleEditor("");
+		}
+	});
+
+	document.getElementById("add-scale-entry").addEventListener("click", () => {
+		const entriesDiv = document.getElementById("scale-entries");
+		const row = document.createElement("div");
+		row.innerHTML = `
+			<input type="number" value="0" class="scale-cat" style="width:60px;" />
+			<input type="color" value="#000000" class="scale-color" />
+			<button type="button" class="remove-scale-entry">X</button>
+		`;
+		entriesDiv.appendChild(row);
+	});
+
+	document.getElementById("scale-entries").addEventListener("click", e => {
+		if (e.target.classList.contains("remove-scale-entry")) {
+			e.target.parentElement.remove();
+		}
+	});
+
+	document.getElementById("save-scale").addEventListener("click", () => {
+		const name = document.getElementById("scale-name").value.trim();
+		if (!name || name === "default" || name === "accessible") {
+			alert("Invalid scale name.");
+			return;
+		}
+		const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => ({
+			cat: Number(div.querySelector(".scale-cat").value),
+			color: div.querySelector(".scale-color").value
+		}));
+		if (entries.length === 0) {
+			alert("Add at least one entry.");
+			return;
+		}
+		saveCustomScale(name, entries);
+		currentScale = name;
+		updateScaleSelector();
+		showScaleEditor(name);
+	});
+});
 
 class MapManager {
     constructor() {

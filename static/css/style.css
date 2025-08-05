@@ -453,6 +453,10 @@ ion-icon+span {
 	cursor: help;
 }
 
+#options-container #custom-scale-section label {
+	cursor: default;
+}
+
 #map-selector {
 	font-weight: 300;
 	font-style: italic;
@@ -606,6 +610,150 @@ ion-icon+span {
 	background: #d32f2f;
 }
 
+/* Custom scale modal */
+#custom-scale-section {
+	border: 1px solid var(--foreground-1);
+	border-radius: .5rem;
+	margin: -1em 0;
+	padding: 1rem;
+	background-color: rgba(0, 0, 0, 0.1);
+}
+
+#custom-scale-section > label {
+	font-weight: bold;
+	color: var(--foreground-1);
+}
+
+#scale-selector, #scale-name {
+	border-radius: .25rem;
+	padding: 5px;
+	border: 1px solid #ccc;
+	background-color: #fff;
+	color: #000;
+}
+
+#scale-selector {
+	margin-right: .5rem;
+}
+
+#delete-scale {
+	background-color: #c00;
+	color: #fff;
+	border: none;
+	border-radius: .25rem;
+	padding: .2rem .5rem;
+	cursor: pointer;
+	transition: background-color .2s;
+	vertical-align: middle;
+}
+
+#delete-scale:hover {
+	background-color: #f44336;
+}
+
+#scale-editor {
+	background-color: rgba(0, 0, 0, 0.05);
+	border-radius: .5rem;
+	margin-top: 1rem;
+	padding: 1rem;
+}
+
+#scale-editor h4 {
+	margin-bottom: .5rem;
+	font-family: "Fira Sans", sans-serif;
+	color: var(--foreground-1);
+}
+
+#scale-entries {
+	max-height: 20vh;
+	overflow-y: auto;
+	margin-bottom: 1rem;
+	padding-right: .5rem;
+}
+
+#scale-entries > div {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	margin-bottom: .5rem;
+	background: rgba(0, 0, 0, 0.1);
+	padding: .5rem;
+	border-radius: .25rem;
+}
+
+.scale-cat {
+	border: 1px solid #ccc;
+	border-radius: .25rem;
+	padding: 5px;
+	font-family: 'Roboto Mono', monospace;
+	background-color: #fff;
+	color: #000;
+	width: 70px;
+}
+
+.scale-color {
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	width: 35px;
+	height: 30px;
+	padding: 0;
+	border: none;
+	cursor: pointer;
+	background-color: transparent;
+}
+
+.scale-color::-webkit-color-swatch {
+	border-radius: .25rem;
+	border: 1px solid #ccc;
+}
+.scale-color::-moz-color-swatch {
+	border-radius: .25rem;
+	border: 1px solid #ccc;
+}
+
+.remove-scale-entry {
+	background-color: transparent;
+	border: 1px solid #c00;
+	color: #c00;
+	border-radius: 50%;
+	cursor: pointer;
+	width: 24px;
+	height: 24px;
+	line-height: 20px;
+	text-align: center;
+	font-weight: bold;
+	transition: all .2s;
+	margin-left: auto;
+	padding: 0;
+}
+
+.remove-scale-entry:hover {
+	background-color: #c00;
+	color: #fff;
+}
+
+#add-scale-entry, #save-scale {
+	background-color: var(--foreground-2);
+	color: #fff;
+	border: none;
+	border-radius: .25rem;
+	padding: .5rem 1rem;
+	cursor: pointer;
+	transition: background-color .2s;
+	margin-right: .5rem;
+	font-family: 'Fira Sans', sans-serif;
+}
+
+#add-scale-entry:hover, #save-scale:hover {
+	background-color: color-mix(in srgb, var(--foreground-2) 80%, #000);
+}
+
+#scale-name {
+	padding: .4rem;
+	vertical-align: middle;
+}
+
 @media screen and (max-width: 800px) {
 	#headers {
 		display: none;
@@ -708,5 +856,24 @@ ion-icon+span {
 
 	#export-options {
 		background: #dddddde5;
+	}
+
+	#custom-scale-section {
+		background-color: #3c3f58;
+		border-color: var(--foreground-1);
+	}
+
+	#scale-editor {
+		background-color: #4a4e69;
+	}
+
+	#scale-entries > div {
+		background: #6b7091;
+	}
+
+	.scale-cat, #scale-selector, #scale-name {
+		background-color: #fff;
+		color: #000;
+		border: 1px solid #999;
 	}
 }
