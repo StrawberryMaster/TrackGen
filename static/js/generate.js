@@ -72,14 +72,23 @@ function updateScaleSelector() {
 function showScaleEditor(scaleName) {
 	const editor = document.getElementById("scale-editor");
 	const entriesDiv = document.getElementById("scale-entries");
+	const unit = document.getElementById("scale-speed-unit").value;
+
 	entriesDiv.innerHTML = "";
 	const scale = customScales[scaleName] || [
 		{ cat: -999, color: "#C0C0C0" }
 	];
+
 	(scale || []).forEach((entry, idx) => {
+		let speed = entry.cat;
+		if (speed !== -999) { // don't convert the placeholder!
+			if (unit === "mph") speed *= 1.15078;
+			else if (unit === "kph") speed *= 1.852;
+		}
+
 		const row = document.createElement("div");
 		row.innerHTML = `
-			<input type="number" value="${entry.cat}" class="scale-cat" style="width:60px;" />
+			<input type="number" value="${Math.round(speed * 100) / 100}" data-knots="${entry.cat}" class="scale-cat" style="width:60px;" />
 			<input type="color" value="${entry.color}" class="scale-color" />
 			<input type="text" value="${entry.color}" class="scale-color-hex" maxlength="7" />
 			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
@@ -99,6 +108,20 @@ document.addEventListener("DOMContentLoaded", () => {
 		showScaleEditor(currentScale !== "default" && currentScale !== "accessible" ? currentScale : "");
 	});
 
+	document.getElementById("scale-speed-unit").addEventListener("change", () => {
+		const unit = document.getElementById("scale-speed-unit").value;
+		document.querySelectorAll("#scale-entries .scale-cat").forEach(input => {
+			let knots = parseFloat(input.dataset.knots);
+			if (knots === -999) return;
+
+			let displaySpeed = knots;
+			if (unit === "mph") displaySpeed *= 1.15078;
+			else if (unit === "kph") displaySpeed *= 1.852;
+			
+			input.value = Math.round(displaySpeed * 100) / 100;
+		});
+	});
+
 	document.getElementById("delete-scale").addEventListener("click", () => {
 		if (currentScale in customScales) {
 			deleteCustomScale(currentScale);
@@ -112,7 +135,7 @@ document.addEventListener("DOMContentLoaded", () => {
 		const entriesDiv = document.getElementById("scale-entries");
 		const row = document.createElement("div");
 		row.innerHTML = `
-			<input type="number" value="0" class="scale-cat" style="width:60px;" />
+			<input type="number" value="0" data-knots="0" class="scale-cat" style="width:60px;" />
 			<input type="color" value="#000000" class="scale-color" />
 			<input type="text" value="#000000" class="scale-color-hex" maxlength="7" />
 			<button type="button" class="remove-scale-entry">X</button>
@@ -129,6 +152,12 @@ document.addEventListener("DOMContentLoaded", () => {
 			if (/^#[0-9a-f]{6}$/i.test(hexValue)) {
 				target.previousElementSibling.value = hexValue;
 			}
+		} else if (target.classList.contains("scale-cat")) {
+			const unit = document.getElementById("scale-speed-unit").value;
+			let speed = parseFloat(target.value);
+			if (unit === "mph") speed /= 1.15078;
+			else if (unit === "kph") speed /= 1.852;
+			target.dataset.knots = speed;
 		}
 	});
 
@@ -148,7 +177,8 @@ document.addEventListener("DOMContentLoaded", () => {
 		const unit = document.getElementById("scale-speed-unit").value;
 
 		const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => {
-			let speed = Number(div.querySelector(".scale-cat").value);
+			const speedInput = div.querySelector(".scale-cat");
+			let speed = Number(speedInput.value);
 			
 			// convert speed to knots before saving
 			if (unit === "mph") speed /= 1.15078;
