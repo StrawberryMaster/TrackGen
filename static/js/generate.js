@@ -1,6 +1,11 @@
-function catToColour(cat = -999, accessible = true) {
+function catToColour(cat = -999, type = "tropical", accessible = true) {
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
 	const colorMap = getScaleMap(scaleName);
+
+	if (currentScale !== "default" && currentScale !== "accessible") {
+		const key = `${type}-${cat}`;
+		return colorMap.get(key) || "#C0C0C0";
+	}
 	return colorMap.get(cat) || "#C0C0C0";
 }
 
@@ -41,7 +46,11 @@ function getScaleMap(scaleName) {
 	const scale = customScales[scaleName];
 	if (!scale) return getScaleMap("default");
 	const map = new Map();
-	scale.forEach(entry => map.set(Number(entry.cat), entry.color));
+	scale.forEach(entry => {
+		const type = entry.type || "tropical";
+		const key = `${type}-${Number(entry.cat)}`;
+		map.set(key, entry.color);
+	});
 	return map;
 }
 
@@ -670,7 +679,7 @@ function createMap(data, accessible) {
             }, {});
 
             const pointGroups = adjustedData.reduce((map, point) => {
-                const key = `${catToColour(point.category, accessible)}|${point.shape}`;
+                const key = `${catToColour(point.category, point.type, accessible)}|${point.shape}`;
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
