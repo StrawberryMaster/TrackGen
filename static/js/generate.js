@@ -76,7 +76,7 @@ function showScaleEditor(scaleName) {
 
 	entriesDiv.innerHTML = "";
 	const scale = customScales[scaleName] || [
-		{ cat: -999, color: "#C0C0C0" }
+		{ cat: -999, color: "#C0C0C0", type: "tropical" }
 	];
 
 	(scale || []).forEach((entry, idx) => {
@@ -86,11 +86,18 @@ function showScaleEditor(scaleName) {
 			else if (unit === "kph") speed *= 1.852;
 		}
 
+		const type = entry.type || "tropical"; // default to tropical
+
 		const row = document.createElement("div");
 		row.innerHTML = `
 			<input type="number" value="${Math.round(speed * 100) / 100}" data-knots="${entry.cat}" class="scale-cat" style="width:60px;" />
 			<input type="color" value="${entry.color}" class="scale-color" />
 			<input type="text" value="${entry.color}" class="scale-color-hex" maxlength="7" />
+			<select class="scale-type">
+				<option value="tropical" ${type === 'tropical' ? 'selected' : ''}>Tropical</option>
+				<option value="subtropical" ${type === 'subtropical' ? 'selected' : ''}>Subtropical</option>
+				<option value="extratropical" ${type === 'extratropical' ? 'selected' : ''}>Extratropical</option>
+			</select>
 			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
 		`;
 		entriesDiv.appendChild(row);
@@ -138,6 +145,11 @@ document.addEventListener("DOMContentLoaded", () => {
 			<input type="number" value="0" data-knots="0" class="scale-cat" style="width:60px;" />
 			<input type="color" value="#000000" class="scale-color" />
 			<input type="text" value="#000000" class="scale-color-hex" maxlength="7" />
+			<select class="scale-type">
+				<option value="tropical" selected>Tropical</option>
+				<option value="subtropical">Subtropical</option>
+				<option value="extratropical">Extratropical</option>
+			</select>
 			<button type="button" class="remove-scale-entry">X</button>
 		`;
 		entriesDiv.appendChild(row);
@@ -186,7 +198,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 			return {
 				cat: speed,
-				color: div.querySelector(".scale-color").value
+				color: div.querySelector(".scale-color").value,
+				type: div.querySelector(".scale-type").value
 			};
 		});
 
