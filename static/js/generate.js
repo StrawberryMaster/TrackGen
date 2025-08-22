@@ -1,12 +1,20 @@
-function catToColour(cat = -999, type = "tropical", accessible = true) {
+function catToColour(cat = -999, accessible = true, stormType = "tropical") {
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
 	const colorMap = getScaleMap(scaleName);
 
-	if (currentScale !== "default" && currentScale !== "accessible") {
-		const key = `${type}-${cat}`;
-		return colorMap.get(key) || "#C0C0C0";
-	}
-	return colorMap.get(cat) || "#C0C0C0";
+	// for custom scales, try typed key first
+	const catNum = Number(cat);
+	const typedKey = `${catNum}|${(stormType || "tropical").toLowerCase()}`;
+	if (colorMap.has && colorMap.has(typedKey)) return colorMap.get(typedKey);
+
+	// then fallback to tropical
+	const tropicalKey = `${catNum}|tropical`;
+	if (colorMap.has && colorMap.has(tropicalKey)) return colorMap.get(tropicalKey);
+
+	// and then fallback to numeric key
+	if (colorMap.has && colorMap.has(catNum)) return colorMap.get(catNum);
+
+	return "#C0C0C0";
 }
 
 const SCALE_STORAGE_KEY = "trackgen_custom_scales";
@@ -45,12 +53,29 @@ function getScaleMap(scaleName) {
 	// custom scale
 	const scale = customScales[scaleName];
 	if (!scale) return getScaleMap("default");
+
 	const map = new Map();
-	scale.forEach(entry => {
-		const type = entry.type || "tropical";
-		const key = `${type}-${Number(entry.cat)}`;
-		map.set(key, entry.color);
+	const tropicalByCat = new Map();
+	const anyByCat = new Map();
+
+	(scale || []).forEach(entry => {
+		const catNum = Number(entry.cat);
+		const type = (entry.type || "tropical").toLowerCase();
+		const color = entry.color;
+
+		const typedKey = `${catNum}|${type}`;
+		if (!map.has(typedKey)) map.set(typedKey, color);
+
+		if (type === "tropical") {
+			tropicalByCat.set(catNum, color);
+		} else if (!anyByCat.has(catNum)) {
+			anyByCat.set(catNum, color);
+		}
 	});
+
+	tropicalByCat.forEach((color, catNum) => map.set(catNum, color));
+	anyByCat.forEach((color, catNum) => { if (!map.has(catNum)) map.set(catNum, color); });
+
 	return map;
 }
 
@@ -208,7 +233,7 @@ document.addEventListener("DOMContentLoaded", () => {
 			return {
 				cat: speed,
 				color: div.querySelector(".scale-color").value,
-				type: div.querySelector(".scale-type").value
+				type: (div.querySelector(".scale-type")?.value || "tropical")
 			};
 		});
 
@@ -222,6 +247,23 @@ document.addEventListener("DOMContentLoaded", () => {
 		showScaleEditor(name);
 	});
 });
+
+function normalizeStormType(raw) {
+	const v = String(raw || "").trim().toLowerCase();
+	if (!v) return "tropical";
+	// extratropical
+	if (["ex", "extratropical", "post-tropical", "posttropical", "pt"].includes(v)) return "extratropical";
+	// subtropical
+	if (["st", "ss", "sd", "subtropical"].includes(v)) return "subtropical";
+	// tropical (hu/ts/td/tc, etc.)
+	return "tropical";
+}
+
+function getStormType(point) {
+	return normalizeStormType(
+		point?.type ?? point?.stormType ?? point?.systemType ?? point?.status ?? point?.subtype
+	);
+}
 
 class MapManager {
     constructor() {
@@ -679,7 +721,8 @@ function createMap(data, accessible) {
             }, {});
 
             const pointGroups = adjustedData.reduce((map, point) => {
-                const key = `${catToColour(point.category, point.type, accessible)}|${point.shape}`;
+                const stormType = getStormType(point);
+                const key = `${catToColour(point.category, accessible, stormType)}|${point.shape}`;
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
