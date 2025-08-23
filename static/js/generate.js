@@ -1,49 +1,7 @@
-function catToColour(cat = -999, accessible = true, stormType = "tropical") {
+function catToColour(cat = -999, accessible = true) {
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
 	const colorMap = getScaleMap(scaleName);
-
-	if (scaleName === "default" || scaleName === "accessible") {
-		return colorMap.get(cat) || "#C0C0C0";
-	}
-
-	const value = Number(cat);
-	const normType = (stormType || "tropical").toLowerCase();
-
-	const norm = (t) => {
-		const v = String(t || "").trim().toLowerCase();
-		if (!v) return "tropical";
-		if (["ex", "extratropical", "post-tropical", "posttropical", "pt"].includes(v)) return "extratropical";
-		if (["st", "ss", "sd", "subtropical"].includes(v)) return "subtropical";
-		return "tropical";
-	};
-
-	const entries = customScales[scaleName] || [];
-
-	let group = entries.filter(e => norm(e.type) === normType);
-	if (group.length === 0 && normType !== "tropical") {
-		group = entries.filter(e => norm(e.type) === "tropical");
-	}
-	if (group.length === 0) group = entries;
-
-	const usable = group
-		.map(e => ({ thr: Number(e.cat), color: e.color }))
-		.filter(e => Number.isFinite(e.thr) && e.thr !== -999)
-		.sort((a, b) => a.thr - b.thr);
-
-	if (usable.length === 0) {
-		const anyColor = (entries.find(e => Number(e.cat) !== -999)?.color);
-		return anyColor || "#C0C0C0";
-	}
-
-	let chosen = null;
-	if (Number.isFinite(value)) {
-		for (let i = usable.length - 1; i >= 0; i--) {
-			if (usable[i].thr <= value) { chosen = usable[i]; break; }
-		}
-	}
-	if (!chosen) chosen = usable[0];
-
-	return chosen.color || "#C0C0C0";
+	return colorMap.get(cat) || "#C0C0C0";
 }
 
 const SCALE_STORAGE_KEY = "trackgen_custom_scales";
@@ -82,19 +40,8 @@ function getScaleMap(scaleName) {
 	// custom scale
 	const scale = customScales[scaleName];
 	if (!scale) return getScaleMap("default");
-
 	const map = new Map();
-
-	(scale || []).forEach(entry => {
-		const catNum = Number(entry.cat);
-		const type = (entry.type || "tropical").toLowerCase();
-		const color = entry.color;
-		const typedKey = `${catNum}|${type}`;
-		if (!map.has(typedKey)) {
-			map.set(typedKey, color);
-		}
-	});
-
+	scale.forEach(entry => map.set(Number(entry.cat), entry.color));
 	return map;
 }
 
@@ -252,7 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
 			return {
 				cat: speed,
 				color: div.querySelector(".scale-color").value,
-				type: (div.querySelector(".scale-type")?.value || "tropical")
+				type: div.querySelector(".scale-type").value
 			};
 		});
 
@@ -266,143 +213,6 @@ document.addEventListener("DOMContentLoaded", () => {
 		showScaleEditor(name);
 	});
 });
-
-function normalizeStormType(raw) {
-	const v = String(raw || "").trim().toLowerCase();
-	if (!v) return "tropical";
-	// extratropical
-	if (["ex", "extratropical", "post-tropical", "posttropical", "pt"].includes(v)) return "extratropical";
-	// subtropical
-	if (["st", "ss", "sd", "subtropical"].includes(v)) return "subtropical";
-	// tropical (hu/ts/td/tc, etc.)
-	return "tropical";
-}
-
-function getStormType(point) {
-	return normalizeStormType(
-		point?.type ?? point?.stormType ?? point?.systemType ?? point?.status ?? point?.subtype
-	);
-}
-
-function toKnots(val, unit) {
-	const v = Number(val);
-	if (!Number.isFinite(v)) return NaN;
-	switch ((unit || "kt").toLowerCase()) {
-		case "mph": return v / 1.15078;
-		case "kph":
-		case "kmh":
-		case "km/h": return v / 1.852;
-		case "mps":
-		case "m/s": return v * 1.943844; // 1 m/s = 1.943844 kt
-		case "kt":
-		case "kts":
-		case "knot":
-		case "knots":
-		default: return v;
-	}
-}
-
-function parseSpeedStringToKnots(input) {
-	if (input == null) return NaN;
-	const s = String(input).trim().toLowerCase();
-	const m = s.match(/-?\d+(?:\.\d+)?/);
-	if (!m) return NaN;
-	const num = Number(m[0]);
-
-	let unit = "kt";
-	if (/(mph|mi\/h|\bmi h\b|miles\/h)/.test(s)) unit = "mph";
-	else if (/(kph|km\/h|kmh)/.test(s)) unit = "kph";
-	else if (/(m\/s|mps)/.test(s)) unit = "mps";
-	else if (/(kt|kts|knot|knots|kn\b)/.test(s)) unit = "kt";
-
-	return toKnots(num, unit);
-}
-
-function findUnitFor(point, baseKey) {
-	const candidates = [
-		`${baseKey}_unit`, `${baseKey}Unit`,
-		"wind_unit", "windUnit", "speed_unit", "speedUnit",
-		"units", "unit"
-	];
-	for (const k of candidates) {
-		const u = point?.[k];
-		if (typeof u === "string" && u.trim()) {
-			const su = u.trim().toLowerCase();
-			if (su.includes("mph") || su.includes("mi")) return "mph";
-			if (su.includes("kph") || su.includes("km")) return "kph";
-			if (su.includes("m/s") || su.includes("mps")) return "mps";
-			if (su.includes("kt") || su.includes("knot") || su.includes("kn")) return "kt";
-		}
-	}
-	return null;
-}
-
-function getWindKnots(point) {
-	const num = (v) => {
-		const n = Number(v);
-		return Number.isFinite(n) ? n : NaN;
-	};
-
-	const ktsFields = [
-		"wind_kts", "windKts", "wind_knots",
-		"max_wind_kts", "maxWindKts"
-	];
-	for (const f of ktsFields) {
-		if (point?.[f] != null) {
-			const direct = num(point[f]);
-			if (Number.isFinite(direct)) return toKnots(direct, "kt");
-			const parsed = parseSpeedStringToKnots(point[f]);
-			if (Number.isFinite(parsed)) return parsed;
-		}
-	}
-
-	const mphFields = ["wind_mph", "max_wind_mph", "maxWindMph"];
-	for (const f of mphFields) {
-		if (point?.[f] != null) {
-			const direct = num(point[f]);
-			if (Number.isFinite(direct)) return toKnots(direct, "mph");
-			const parsed = parseSpeedStringToKnots(point[f]);
-			if (Number.isFinite(parsed)) return parsed;
-		}
-	}
-	const kphFields = ["wind_kph", "max_wind_kph", "maxWindKph"];
-	for (const f of kphFields) {
-		if (point?.[f] != null) {
-			const direct = num(point[f]);
-			if (Number.isFinite(direct)) return toKnots(direct, "kph");
-			const parsed = parseSpeedStringToKnots(point[f]);
-			if (Number.isFinite(parsed)) return parsed;
-		}
-	}
-
-	const genericKeys = [
-		"wind", "windspeed", "speed",
-		"max_wind", "maxWind", "max_windspeed", "sustained", "max_sustained", "maxSustained"
-	];
-	for (const key of genericKeys) {
-		if (point?.[key] != null) {
-			const unit = findUnitFor(point, key);
-			const val = point[key];
-			const n = num(val);
-			if (Number.isFinite(n)) return toKnots(n, unit || "kt");
-			const parsed = parseSpeedStringToKnots(val);
-			if (Number.isFinite(parsed)) return parsed;
-		}
-	}
-
-	for (const [key, val] of Object.entries(point || {})) {
-		if (/(lat|lon|long|press|gust|gusts|deg|dir|bearing)/i.test(key)) continue;
-		if (typeof val === "string" && /\d/.test(val)) {
-			const parsed = parseSpeedStringToKnots(val);
-			if (Number.isFinite(parsed)) return parsed;
-		}
-		if (typeof val === "number" && /(wind|speed)/i.test(key)) {
-			return toKnots(val, findUnitFor(point, key) || "kt");
-		}
-	}
-
-	return NaN;
-}
 
 class MapManager {
     constructor() {
@@ -859,11 +669,8 @@ function createMap(data, accessible) {
                 return acc;
             }, {});
 
-            const isCustom = currentScale !== "default" && currentScale !== "accessible";
             const pointGroups = adjustedData.reduce((map, point) => {
-                const stormType = getStormType(point);
-                const valueForScale = isCustom ? getWindKnots(point) : point.category;
-                const key = `${catToColour(valueForScale, accessible, stormType)}|${point.shape}`;
+                const key = `${catToColour(point.category, accessible)}|${point.shape}`;
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
