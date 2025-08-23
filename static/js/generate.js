@@ -2,31 +2,48 @@ function catToColour(cat = -999, accessible = true, stormType = "tropical") {
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
 	const colorMap = getScaleMap(scaleName);
 
-	// for default scales, use the numeric key
 	if (scaleName === "default" || scaleName === "accessible") {
 		return colorMap.get(cat) || "#C0C0C0";
 	}
 
-	// for custom scales, use typed key logic
-	const catNum = Number(cat);
-	const normalizedStormType = (stormType || "tropical").toLowerCase();
+	const value = Number(cat);
+	const normType = (stormType || "tropical").toLowerCase();
 
-	// try exact match for storm type
-	const typedKey = `${catNum}|${normalizedStormType}`;
-	if (colorMap.has(typedKey)) {
-		return colorMap.get(typedKey);
+	const norm = (t) => {
+		const v = String(t || "").trim().toLowerCase();
+		if (!v) return "tropical";
+		if (["ex", "extratropical", "post-tropical", "posttropical", "pt"].includes(v)) return "extratropical";
+		if (["st", "ss", "sd", "subtropical"].includes(v)) return "subtropical";
+		return "tropical";
+	};
+
+	const entries = customScales[scaleName] || [];
+
+	let group = entries.filter(e => norm(e.type) === normType);
+	if (group.length === 0 && normType !== "tropical") {
+		group = entries.filter(e => norm(e.type) === "tropical");
+	}
+	if (group.length === 0) group = entries;
+
+	const usable = group
+		.map(e => ({ thr: Number(e.cat), color: e.color }))
+		.filter(e => Number.isFinite(e.thr) && e.thr !== -999)
+		.sort((a, b) => a.thr - b.thr);
+
+	if (usable.length === 0) {
+		const anyColor = (entries.find(e => Number(e.cat) !== -999)?.color);
+		return anyColor || "#C0C0C0";
 	}
 
-	// if not found and type isn't tropical, try fallback to tropical
-	if (normalizedStormType !== "tropical") {
-		const tropicalKey = `${catNum}|tropical`;
-		if (colorMap.has(tropicalKey)) {
-			return colorMap.get(tropicalKey);
+	let chosen = null;
+	if (Number.isFinite(value)) {
+		for (let i = usable.length - 1; i >= 0; i--) {
+			if (usable[i].thr <= value) { chosen = usable[i]; break; }
 		}
 	}
+	if (!chosen) chosen = usable[0];
 
-	// fallback
-	return "#C0C0C0";
+	return chosen.color || "#C0C0C0";
 }
 
 const SCALE_STORAGE_KEY = "trackgen_custom_scales";
@@ -72,8 +89,6 @@ function getScaleMap(scaleName) {
 		const catNum = Number(entry.cat);
 		const type = (entry.type || "tropical").toLowerCase();
 		const color = entry.color;
-
-		// to avoid overwriting keys
 		const typedKey = `${catNum}|${type}`;
 		if (!map.has(typedKey)) {
 			map.set(typedKey, color);
@@ -267,6 +282,56 @@ function getStormType(point) {
 	return normalizeStormType(
 		point?.type ?? point?.stormType ?? point?.systemType ?? point?.status ?? point?.subtype
 	);
+}
+
+function getWindKnots(point) {
+	const num = (v) => {
+		const n = Number(v);
+		return Number.isFinite(n) ? n : NaN;
+	};
+
+	const ktsFields = [
+		"wind_kts", "windKts", "wind_knots",
+		"max_wind_kts", "maxWindKts"
+	];
+	for (const f of ktsFields) {
+		if (point?.[f] != null) {
+			const v = num(point[f]);
+			if (Number.isFinite(v)) return v;
+		}
+	}
+
+	const mphFields = [
+		"wind_mph", "max_wind_mph", "maxWindMph"
+	];
+	for (const f of mphFields) {
+		if (point?.[f] != null) {
+			const v = num(point[f]);
+			if (Number.isFinite(v)) return v / 1.15078;
+		}
+	}
+
+	const kphFields = [
+		"wind_kph", "max_wind_kph", "maxWindKph"
+	];
+	for (const f of kphFields) {
+		if (point?.[f] != null) {
+			const v = num(point[f]);
+			if (Number.isFinite(v)) return v / 1.852;
+		}
+	}
+    
+	const genericFields = [
+		"wind", "windspeed", "max_wind", "maxWind", "max_windspeed"
+	];
+	for (const f of genericFields) {
+		if (point?.[f] != null) {
+			const v = num(point[f]);
+			if (Number.isFinite(v)) return v;
+		}
+	}
+
+	return NaN;
 }
 
 class MapManager {
@@ -724,9 +789,11 @@ function createMap(data, accessible) {
                 return acc;
             }, {});
 
+            const isCustom = currentScale !== "default" && currentScale !== "accessible";
             const pointGroups = adjustedData.reduce((map, point) => {
                 const stormType = getStormType(point);
-                const key = `${catToColour(point.category, accessible, stormType)}|${point.shape}`;
+                const valueForScale = isCustom ? getWindKnots(point) : point.category;
+                const key = `${catToColour(valueForScale, accessible, stormType)}|${point.shape}`;
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
