@@ -284,6 +284,59 @@ function getStormType(point) {
 	);
 }
 
+function toKnots(val, unit) {
+	const v = Number(val);
+	if (!Number.isFinite(v)) return NaN;
+	switch ((unit || "kt").toLowerCase()) {
+		case "mph": return v / 1.15078;
+		case "kph":
+		case "kmh":
+		case "km/h": return v / 1.852;
+		case "mps":
+		case "m/s": return v * 1.943844; // 1 m/s = 1.943844 kt
+		case "kt":
+		case "kts":
+		case "knot":
+		case "knots":
+		default: return v;
+	}
+}
+
+function parseSpeedStringToKnots(input) {
+	if (input == null) return NaN;
+	const s = String(input).trim().toLowerCase();
+	const m = s.match(/-?\d+(?:\.\d+)?/);
+	if (!m) return NaN;
+	const num = Number(m[0]);
+
+	let unit = "kt";
+	if (/(mph|mi\/h|\bmi h\b|miles\/h)/.test(s)) unit = "mph";
+	else if (/(kph|km\/h|kmh)/.test(s)) unit = "kph";
+	else if (/(m\/s|mps)/.test(s)) unit = "mps";
+	else if (/(kt|kts|knot|knots|kn\b)/.test(s)) unit = "kt";
+
+	return toKnots(num, unit);
+}
+
+function findUnitFor(point, baseKey) {
+	const candidates = [
+		`${baseKey}_unit`, `${baseKey}Unit`,
+		"wind_unit", "windUnit", "speed_unit", "speedUnit",
+		"units", "unit"
+	];
+	for (const k of candidates) {
+		const u = point?.[k];
+		if (typeof u === "string" && u.trim()) {
+			const su = u.trim().toLowerCase();
+			if (su.includes("mph") || su.includes("mi")) return "mph";
+			if (su.includes("kph") || su.includes("km")) return "kph";
+			if (su.includes("m/s") || su.includes("mps")) return "mps";
+			if (su.includes("kt") || su.includes("knot") || su.includes("kn")) return "kt";
+		}
+	}
+	return null;
+}
+
 function getWindKnots(point) {
 	const num = (v) => {
 		const n = Number(v);
@@ -296,38 +349,55 @@ function getWindKnots(point) {
 	];
 	for (const f of ktsFields) {
 		if (point?.[f] != null) {
-			const v = num(point[f]);
-			if (Number.isFinite(v)) return v;
+			const direct = num(point[f]);
+			if (Number.isFinite(direct)) return toKnots(direct, "kt");
+			const parsed = parseSpeedStringToKnots(point[f]);
+			if (Number.isFinite(parsed)) return parsed;
 		}
 	}
 
-	const mphFields = [
-		"wind_mph", "max_wind_mph", "maxWindMph"
-	];
+	const mphFields = ["wind_mph", "max_wind_mph", "maxWindMph"];
 	for (const f of mphFields) {
 		if (point?.[f] != null) {
-			const v = num(point[f]);
-			if (Number.isFinite(v)) return v / 1.15078;
+			const direct = num(point[f]);
+			if (Number.isFinite(direct)) return toKnots(direct, "mph");
+			const parsed = parseSpeedStringToKnots(point[f]);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+	}
+	const kphFields = ["wind_kph", "max_wind_kph", "maxWindKph"];
+	for (const f of kphFields) {
+		if (point?.[f] != null) {
+			const direct = num(point[f]);
+			if (Number.isFinite(direct)) return toKnots(direct, "kph");
+			const parsed = parseSpeedStringToKnots(point[f]);
+			if (Number.isFinite(parsed)) return parsed;
 		}
 	}
 
-	const kphFields = [
-		"wind_kph", "max_wind_kph", "maxWindKph"
+	const genericKeys = [
+		"wind", "windspeed", "speed",
+		"max_wind", "maxWind", "max_windspeed", "sustained", "max_sustained", "maxSustained"
 	];
-	for (const f of kphFields) {
-		if (point?.[f] != null) {
-			const v = num(point[f]);
-			if (Number.isFinite(v)) return v / 1.852;
+	for (const key of genericKeys) {
+		if (point?.[key] != null) {
+			const unit = findUnitFor(point, key);
+			const val = point[key];
+			const n = num(val);
+			if (Number.isFinite(n)) return toKnots(n, unit || "kt");
+			const parsed = parseSpeedStringToKnots(val);
+			if (Number.isFinite(parsed)) return parsed;
 		}
 	}
-    
-	const genericFields = [
-		"wind", "windspeed", "max_wind", "maxWind", "max_windspeed"
-	];
-	for (const f of genericFields) {
-		if (point?.[f] != null) {
-			const v = num(point[f]);
-			if (Number.isFinite(v)) return v;
+
+	for (const [key, val] of Object.entries(point || {})) {
+		if (/(lat|lon|long|press|gust|gusts|deg|dir|bearing)/i.test(key)) continue;
+		if (typeof val === "string" && /\d/.test(val)) {
+			const parsed = parseSpeedStringToKnots(val);
+			if (Number.isFinite(parsed)) return parsed;
+		}
+		if (typeof val === "number" && /(wind|speed)/i.test(key)) {
+			return toKnots(val, findUnitFor(point, key) || "kt");
 		}
 	}
 
