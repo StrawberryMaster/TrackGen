@@ -2,18 +2,30 @@ function catToColour(cat = -999, accessible = true, stormType = "tropical") {
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
 	const colorMap = getScaleMap(scaleName);
 
-	// for custom scales, try typed key first
+	// for default scales, use the numeric key
+	if (scaleName === "default" || scaleName === "accessible") {
+		return colorMap.get(cat) || "#C0C0C0";
+	}
+
+	// for custom scales, use typed key logic
 	const catNum = Number(cat);
-	const typedKey = `${catNum}|${(stormType || "tropical").toLowerCase()}`;
-	if (colorMap.has && colorMap.has(typedKey)) return colorMap.get(typedKey);
+	const normalizedStormType = (stormType || "tropical").toLowerCase();
 
-	// then fallback to tropical
-	const tropicalKey = `${catNum}|tropical`;
-	if (colorMap.has && colorMap.has(tropicalKey)) return colorMap.get(tropicalKey);
+	// try exact match for storm type
+	const typedKey = `${catNum}|${normalizedStormType}`;
+	if (colorMap.has(typedKey)) {
+		return colorMap.get(typedKey);
+	}
 
-	// and then fallback to numeric key
-	if (colorMap.has && colorMap.has(catNum)) return colorMap.get(catNum);
+	// if not found and type isn't tropical, try fallback to tropical
+	if (normalizedStormType !== "tropical") {
+		const tropicalKey = `${catNum}|tropical`;
+		if (colorMap.has(tropicalKey)) {
+			return colorMap.get(tropicalKey);
+		}
+	}
 
+	// fallback
 	return "#C0C0C0";
 }
 
@@ -55,26 +67,18 @@ function getScaleMap(scaleName) {
 	if (!scale) return getScaleMap("default");
 
 	const map = new Map();
-	const tropicalByCat = new Map();
-	const anyByCat = new Map();
 
 	(scale || []).forEach(entry => {
 		const catNum = Number(entry.cat);
 		const type = (entry.type || "tropical").toLowerCase();
 		const color = entry.color;
 
+		// to avoid overwriting keys
 		const typedKey = `${catNum}|${type}`;
-		if (!map.has(typedKey)) map.set(typedKey, color);
-
-		if (type === "tropical") {
-			tropicalByCat.set(catNum, color);
-		} else if (!anyByCat.has(catNum)) {
-			anyByCat.set(catNum, color);
+		if (!map.has(typedKey)) {
+			map.set(typedKey, color);
 		}
 	});
-
-	tropicalByCat.forEach((color, catNum) => map.set(catNum, color));
-	anyByCat.forEach((color, catNum) => { if (!map.has(catNum)) map.set(catNum, color); });
 
 	return map;
 }
