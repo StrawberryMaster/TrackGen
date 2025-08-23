@@ -1,7 +1,15 @@
-function catToColour(cat = -999, accessible = true) {
+function catToColour(cat = -999, accessible = true, type = "tropical") {
+	const normalizeType = (t) => {
+		if (!t) return "tropical";
+		const s = String(t).toLowerCase();
+		if (s.startsWith("sub")) return "subtropical";
+		if (s.startsWith("extra")) return "extratropical";
+		return "tropical";
+	};
 	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
-	const colorMap = getScaleMap(scaleName);
-	return colorMap.get(cat) || "#C0C0C0";
+	// use per-type map directly
+	const map = getScaleMap(scaleName, normalizeType(type));
+	return (map.get(cat) || "#C0C0C0");
 }
 
 const SCALE_STORAGE_KEY = "trackgen_custom_scales";
@@ -12,9 +20,11 @@ function getScaleList() {
 	return ["default", "accessible", ...Object.keys(customScales)];
 }
 
-function getScaleMap(scaleName) {
+// returns an object of three independent maps
+function getScaleMaps(scaleName) {
+	const cloneMap = (src) => new Map(Array.from(src.entries()));
 	if (scaleName === "default") {
-		return new Map([
+		const base = new Map([
 			[-999, "#C0C0C0"],
 			[-2, "#5EBAFF"],
 			[-1, "#00FAF4"],
@@ -24,9 +34,14 @@ function getScaleMap(scaleName) {
 			[4, "#FF8F20"],
 			[5, "#FF6060"],
 		]);
+		return {
+			tropical: cloneMap(base),
+			subtropical: cloneMap(base),
+			extratropical: cloneMap(base),
+		};
 	}
 	if (scaleName === "accessible") {
-		return new Map([
+		const base = new Map([
 			[-999, "#C0C0C0"],
 			[-2, "#6ec1ea"],
 			[-1, "#4dffff"],
@@ -36,13 +51,37 @@ function getScaleMap(scaleName) {
 			[4, "#ff738a"],
 			[5, "#a188fc"],
 		]);
+		return {
+			tropical: cloneMap(base),
+			subtropical: cloneMap(base),
+			extratropical: cloneMap(base),
+		};
 	}
-	// custom scale
+	const normalizeType = (t) => {
+		if (!t) return "tropical";
+		const s = String(t).toLowerCase();
+		if (s.startsWith("sub")) return "subtropical";
+		if (s.startsWith("extra")) return "extratropical";
+		return "tropical";
+	};
 	const scale = customScales[scaleName];
-	if (!scale) return getScaleMap("default");
-	const map = new Map();
-	scale.forEach(entry => map.set(Number(entry.cat), entry.color));
-	return map;
+	if (!scale) return getScaleMaps("default");
+	const maps = { tropical: new Map(), subtropical: new Map(), extratropical: new Map() };
+	scale.forEach(entry => {
+		const t = normalizeType(entry.type);
+		maps[t].set(Number(entry.cat), entry.color);
+	});
+	return maps;
+}
+
+// returns a single Map, optional type selects which map; default to tropical for legacy callers
+function getScaleMap(scaleName, type) {
+	const maps = getScaleMaps(scaleName);
+	if (!type) return maps.tropical;
+	const key = String(type).toLowerCase().startsWith("sub") ? "subtropical"
+		: String(type).toLowerCase().startsWith("extra") ? "extratropical"
+		: "tropical";
+	return maps[key] || maps.tropical;
 }
 
 function saveCustomScale(name, entries) {
@@ -513,6 +552,21 @@ function normalizeLongitude(lng) {
     return ((lng + 180) % 360 + 360) % 360 - 180;
 }
 
+// determine point type (tropical/subtropical/extratropical) from available fields
+function getPointType(point) {
+	const normalizeType = (t) => {
+		if (!t) return "tropical";
+		const s = String(t).toLowerCase();
+		if (s.startsWith("sub")) return "subtropical";
+		if (s.startsWith("extra")) return "extratropical";
+		return "tropical";
+	};
+	// prefer explicit type, then stage text, fallback to tropical
+	if (point.type) return normalizeType(point.type);
+	if (point.stage) return normalizeType(point.stage);
+	return "tropical";
+}
+
 function createMap(data, accessible) {
     const elements = mapManager.state.domElements;
     const output = elements.output;
@@ -670,7 +724,7 @@ function createMap(data, accessible) {
             }, {});
 
             const pointGroups = adjustedData.reduce((map, point) => {
-                const key = `${catToColour(point.category, accessible)}|${point.shape}`;
+                const key = `${catToColour(point.category, accessible, getPointType(point))}|${point.shape}`;
                 if (!map.has(key)) {
                     map.set(key, []);
                 }
