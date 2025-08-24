@@ -358,6 +358,10 @@ ion-icon+span {
 }
 
 .hidden {
+	display: none;
+}
+
+.hidden-2 {
 	display: none !important;
 }
 

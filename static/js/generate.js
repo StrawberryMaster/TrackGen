@@ -358,7 +358,7 @@ class MapManager {
             mapManager.state.loading = false;
         }
         const acePanel = document.getElementById("ace-results");
-        if (acePanel) acePanel.classList.add("hidden");
+        if (acePanel) acePanel.classList.add("hidden-2");
     }
 
     handleCustomMapUpload(event) {
@@ -588,7 +588,7 @@ function computeACEByStorm(points) {
 function renderACEResults(ace) {
 	const container = document.getElementById("ace-results");
 	if (!container) return;
-	container.classList.remove("hidden");
+	container.classList.remove("hidden-2");
 	container.innerHTML = `
 		<h3 style="margin:.25rem 0;">ACE</h3>
 		<div class="ace-total">Total: ${ace.totalAce}</div>
@@ -623,7 +623,7 @@ function createMap(data, accessible) {
 
     // Hide ACE panel while generating to avoid stale values
     const acePanel = document.getElementById("ace-results");
-    if (acePanel) acePanel.classList.add("hidden");
+    if (acePanel) acePanel.classList.add("hidden-2");
 
     closeButton.classList.remove("hidden");
     output.classList.add("hidden");
@@ -874,6 +874,6 @@ function createMap(data, accessible) {
             mapManager.state.loading = false;
 
             const acePanel = document.getElementById("ace-results");
-            if (acePanel) acePanel.classList.add("hidden");
+            if (acePanel) acePanel.classList.add("hidden-2");
         });
 }
