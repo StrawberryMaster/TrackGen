@@ -357,6 +357,8 @@ class MapManager {
             mapManager.hideLoader();
             mapManager.state.loading = false;
         }
+        const acePanel = document.getElementById("ace-results");
+        if (acePanel) acePanel.classList.add("hidden");
     }
 
     handleCustomMapUpload(event) {
@@ -552,6 +554,50 @@ function normalizeLongitude(lng) {
     return ((lng + 180) % 360 + 360) % 360 - 180;
 }
 
+// ACE helpers
+function computeACEByStorm(points) {
+    const groups = points.reduce((acc, p) => {
+        const k = p.name || "Unnamed";
+        (acc[k] ??= []).push(p);
+        return acc;
+    }, {});
+    const storms = [];
+    let total = 0;
+
+    Object.entries(groups).forEach(([name, arr]) => {
+        let sum = 0, pts = 0, tsPts = 0;
+        arr.forEach(p => {
+            const v = Number(p.speed);
+            if (!Number.isFinite(v)) return;
+            pts++;
+            if (v >= 34) {
+                const v5 = Math.round(v / 5) * 5; // NOAA convention
+                sum += v5 * v5;
+                tsPts++;
+            }
+        });
+        const ace = +(sum / 10000).toFixed(2);
+        storms.push({ name, ace, points: pts, tsPoints: tsPts });
+        total += ace;
+    });
+
+    storms.sort((a, b) => b.ace - a.ace);
+    return { totalAce: +total.toFixed(2), storms };
+}
+
+function renderACEResults(ace) {
+	const container = document.getElementById("ace-results");
+	if (!container) return;
+	container.classList.remove("hidden");
+	container.innerHTML = `
+		<h3 style="margin:.25rem 0;">ACE</h3>
+		<div class="ace-total">Total: ${ace.totalAce}</div>
+		<ul class="ace-list">
+			${ace.storms.map(s => `<li>${s.name || "Unnamed"}: ${s.ace} <span>(pts: ${s.tsPoints}/${s.points})</span></li>`).join("")}
+		</ul>
+	`;
+}
+
 // determine point type (tropical/subtropical/extratropical) from available fields
 function getPointType(point) {
 	const normalizeType = (t) => {
@@ -574,6 +620,10 @@ function createMap(data, accessible) {
     const closeButton = elements.closeButton;
     const imageContainer = elements.imageContainer;
     const smallerDotsCheckbox = document.getElementById("smaller-dots");
+
+    // Hide ACE panel while generating to avoid stale values
+    const acePanel = document.getElementById("ace-results");
+    if (acePanel) acePanel.classList.add("hidden");
 
     closeButton.classList.remove("hidden");
     output.classList.add("hidden");
@@ -803,6 +853,13 @@ function createMap(data, accessible) {
             loader.classList.add("hidden");
             output.classList.remove("hidden");
 
+            try {
+                const ace = computeACEByStorm(data);
+                renderACEResults(ace);
+            } catch (e) {
+                console.warn("ACE calculation failed:", e);
+            }
+
             // if map generation is successful, hide the loader icon
             mapManager.hideLoader();
             mapManager.updateStatus('success');
@@ -815,5 +872,8 @@ function createMap(data, accessible) {
             mapManager.hideLoader();
             mapManager.updateStatus('error');
             mapManager.state.loading = false;
+
+            const acePanel = document.getElementById("ace-results");
+            if (acePanel) acePanel.classList.add("hidden");
         });
 }

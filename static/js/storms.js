@@ -54,6 +54,7 @@ function parseStorms(data) {
                 name: tcNumber,
                 shape: getStormsShape(category),
                 category: speedToCat(windSpeedKnots),
+                speed: windSpeedKnots,
                 latitude: formatLatitude(parseFloat(cols[5])),
                 longitude: formatLongitude(parseFloat(cols[6])),
             });

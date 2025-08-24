@@ -54,6 +54,7 @@ function parseIbtracs(data) {
                     name: cols[0],
                     shape: getIbtracsShape(cols[10]),
                     category: speedToCat(max_wind),
+                    speed: max_wind,
                     latitude: parseCoord(cols[6].trim()),
                     longitude: parseCoord(cols[7].trim())
                 }

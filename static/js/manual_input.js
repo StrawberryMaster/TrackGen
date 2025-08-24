@@ -85,7 +85,8 @@ document.querySelector("form").addEventListener("submit", (e) => {
             shape: stageToShape(stage),
             category: speedToCat(speedInKnots),
             latitude: latInput + latDir,
-            longitude: longInput + longDir
+            longitude: longInput + longDir,
+            speed: speedInKnots
         });
     });
 

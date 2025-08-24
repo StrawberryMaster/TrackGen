@@ -32,6 +32,7 @@ function parseHurdat(data) {
                     name: uniqueId,
                     shape: getHurdatShape(cols[3]),
                     category: speedToCat(Number(cols[6])),
+                    speed: Number(cols[6]),
                     latitude: cols[4],
                     longitude: cols[5]
                 }

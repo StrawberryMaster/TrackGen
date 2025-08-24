@@ -29,6 +29,7 @@ function parseRsmc(data) {
                     name: uniqueId,
                     shape: getRsmcShape(cols[2]),
                     category: speedToCat(Number(cols[6])),
+                    speed: Number(cols[6]),
                     latitude: cols[3].slice(0, -1) + "." + cols[3].slice(-1) + "N",
                     longitude: cols[4].slice(0, -1) + "." + cols[4].slice(-1) + "E"
                 }
