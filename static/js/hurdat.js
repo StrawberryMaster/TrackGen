@@ -34,7 +34,8 @@ function parseHurdat(data) {
                     category: speedToCat(Number(cols[6])),
                     speed: Number(cols[6]),
                     latitude: cols[4],
-                    longitude: cols[5]
+                    longitude: cols[5],
+                    stage: cols[3].trim()
                 }
             )
         }

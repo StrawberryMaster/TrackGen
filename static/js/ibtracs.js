@@ -56,7 +56,8 @@ function parseIbtracs(data) {
                     category: speedToCat(max_wind),
                     speed: max_wind,
                     latitude: parseCoord(cols[6].trim()),
-                    longitude: parseCoord(cols[7].trim())
+                    longitude: parseCoord(cols[7].trim()),
+                    stage: cols[10].trim()
                 }
             );
         }

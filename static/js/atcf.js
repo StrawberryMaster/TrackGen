@@ -30,7 +30,8 @@ function parseAtcf(data) {
                 category: speedToCat(Number(cols[8])),
                 speed: Number(cols[8]),
                 latitude: cols[6].slice(0, -2) + "." + cols[6].slice(-2),
-                longitude: cols[7].slice(0, -2) + "." + cols[7].slice(-2)
+                longitude: cols[7].slice(0, -2) + "." + cols[7].slice(-2),
+                stage: cols[10].trim(),
             }
         )
     });

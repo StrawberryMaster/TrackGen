@@ -562,7 +562,7 @@ function computeACEByStorm(points) {
         return acc;
     }, {});
     const storms = [];
-    let total = 0;
+    let totalRaw = 0;
 
     Object.entries(groups).forEach(([name, arr]) => {
         let sum = 0, pts = 0, tsPts = 0;
@@ -570,19 +570,23 @@ function computeACEByStorm(points) {
             const v = Number(p.speed);
             if (!Number.isFinite(v)) return;
             pts++;
-            if (v >= 34) {
+
+            // only include tropical/subtropical points with wind >= 34kt
+            const pointType = getPointType(p);
+            if ((pointType === 'tropical' || pointType === 'subtropical') && v >= 34) {
                 const v5 = Math.round(v / 5) * 5; // NOAA convention
                 sum += v5 * v5;
                 tsPts++;
             }
         });
-        const ace = +(sum / 10000).toFixed(2);
+        const rawAce = sum / 10000;
+        const ace = +rawAce.toFixed(4);
         storms.push({ name, ace, points: pts, tsPoints: tsPts });
-        total += ace;
+        totalRaw += rawAce;
     });
 
     storms.sort((a, b) => b.ace - a.ace);
-    return { totalAce: +total.toFixed(2), storms };
+    return { totalAce: +totalRaw.toFixed(4), storms };
 }
 
 function renderACEResults(ace) {
@@ -600,17 +604,25 @@ function renderACEResults(ace) {
 
 // determine point type (tropical/subtropical/extratropical) from available fields
 function getPointType(point) {
-	const normalizeType = (t) => {
-		if (!t) return "tropical";
-		const s = String(t).toLowerCase();
-		if (s.startsWith("sub")) return "subtropical";
-		if (s.startsWith("extra")) return "extratropical";
-		return "tropical";
-	};
-	// prefer explicit type, then stage text, fallback to tropical
-	if (point.type) return normalizeType(point.type);
-	if (point.stage) return normalizeType(point.stage);
-	return "tropical";
+    const normalizeType = (t) => {
+        if (!t) return "tropical";
+        const s = String(t).trim().toUpperCase();
+
+        if (['SS', 'SD', 'ST'].includes(s) || s.toLowerCase().startsWith("sub")) {
+            return "subtropical";
+        }
+
+        if (['EX', 'ET', 'LO', 'WV', 'DB', 'DS', 'MD', 'IN'].includes(s) || s.toLowerCase().startsWith("extra")) {
+            return "extratropical";
+        }
+        
+        return "tropical";
+    };
+
+    // prefer explicit type, then stage text, fallback to tropical
+    if (point.type) return normalizeType(point.type);
+    if (point.stage) return normalizeType(point.stage);
+    return "tropical";
 }
 
 function createMap(data, accessible) {

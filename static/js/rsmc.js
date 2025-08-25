@@ -31,7 +31,8 @@ function parseRsmc(data) {
                     category: speedToCat(Number(cols[6])),
                     speed: Number(cols[6]),
                     latitude: cols[3].slice(0, -1) + "." + cols[3].slice(-1) + "N",
-                    longitude: cols[4].slice(0, -1) + "." + cols[4].slice(-1) + "E"
+                    longitude: cols[4].slice(0, -1) + "." + cols[4].slice(-1) + "E",
+                    stage: cols[2] === '6' ? 'EX' : 'TS'
                 }
             )
         }
