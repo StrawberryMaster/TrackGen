@@ -1,15 +1,15 @@
 function catToColour(cat = -999, accessible = true, type = "tropical") {
-	const normalizeType = (t) => {
-		if (!t) return "tropical";
-		const s = String(t).toLowerCase();
-		if (s.startsWith("sub")) return "subtropical";
-		if (s.startsWith("extra")) return "extratropical";
-		return "tropical";
-	};
-	const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
-	// use per-type map directly
-	const map = getScaleMap(scaleName, normalizeType(type));
-	return (map.get(cat) || "#C0C0C0");
+    const normalizeType = (t) => {
+        if (!t) return "tropical";
+        const s = String(t).toLowerCase();
+        if (s.startsWith("sub")) return "subtropical";
+        if (s.startsWith("extra")) return "extratropical";
+        return "tropical";
+    };
+    const scaleName = currentScale === "default" ? (accessible ? "accessible" : "default") : currentScale;
+    // use per-type map directly
+    const map = getScaleMap(scaleName, normalizeType(type));
+    return (map.get(cat) || "#C0C0C0");
 }
 
 const SCALE_STORAGE_KEY = "trackgen_custom_scales";
@@ -17,118 +17,118 @@ let customScales = JSON.parse(localStorage.getItem(SCALE_STORAGE_KEY) || "{}");
 let currentScale = "default";
 
 function getScaleList() {
-	return ["default", "accessible", ...Object.keys(customScales)];
+    return ["default", "accessible", ...Object.keys(customScales)];
 }
 
 // returns an object of three independent maps
 function getScaleMaps(scaleName) {
-	const cloneMap = (src) => new Map(Array.from(src.entries()));
-	if (scaleName === "default") {
-		const base = new Map([
-			[-999, "#C0C0C0"],
-			[-2, "#5EBAFF"],
-			[-1, "#00FAF4"],
-			[1, "#FFFFCC"],
-			[2, "#FFE775"],
-			[3, "#FFC140"],
-			[4, "#FF8F20"],
-			[5, "#FF6060"],
-		]);
-		return {
-			tropical: cloneMap(base),
-			subtropical: cloneMap(base),
-			extratropical: cloneMap(base),
-		};
-	}
-	if (scaleName === "accessible") {
-		const base = new Map([
-			[-999, "#C0C0C0"],
-			[-2, "#6ec1ea"],
-			[-1, "#4dffff"],
-			[1, "#ffffD9"],
-			[2, "#ffd98c"],
-			[3, "#ff9e59"],
-			[4, "#ff738a"],
-			[5, "#a188fc"],
-		]);
-		return {
-			tropical: cloneMap(base),
-			subtropical: cloneMap(base),
-			extratropical: cloneMap(base),
-		};
-	}
-	const normalizeType = (t) => {
-		if (!t) return "tropical";
-		const s = String(t).toLowerCase();
-		if (s.startsWith("sub")) return "subtropical";
-		if (s.startsWith("extra")) return "extratropical";
-		return "tropical";
-	};
-	const scale = customScales[scaleName];
-	if (!scale) return getScaleMaps("default");
-	const maps = { tropical: new Map(), subtropical: new Map(), extratropical: new Map() };
-	scale.forEach(entry => {
-		const t = normalizeType(entry.type);
-		maps[t].set(Number(entry.cat), entry.color);
-	});
-	return maps;
+    const cloneMap = (src) => new Map(Array.from(src.entries()));
+    if (scaleName === "default") {
+        const base = new Map([
+            [-999, "#C0C0C0"],
+            [-2, "#5EBAFF"],
+            [-1, "#00FAF4"],
+            [1, "#FFFFCC"],
+            [2, "#FFE775"],
+            [3, "#FFC140"],
+            [4, "#FF8F20"],
+            [5, "#FF6060"],
+        ]);
+        return {
+            tropical: cloneMap(base),
+            subtropical: cloneMap(base),
+            extratropical: cloneMap(base),
+        };
+    }
+    if (scaleName === "accessible") {
+        const base = new Map([
+            [-999, "#C0C0C0"],
+            [-2, "#6ec1ea"],
+            [-1, "#4dffff"],
+            [1, "#ffffD9"],
+            [2, "#ffd98c"],
+            [3, "#ff9e59"],
+            [4, "#ff738a"],
+            [5, "#a188fc"],
+        ]);
+        return {
+            tropical: cloneMap(base),
+            subtropical: cloneMap(base),
+            extratropical: cloneMap(base),
+        };
+    }
+    const normalizeType = (t) => {
+        if (!t) return "tropical";
+        const s = String(t).toLowerCase();
+        if (s.startsWith("sub")) return "subtropical";
+        if (s.startsWith("extra")) return "extratropical";
+        return "tropical";
+    };
+    const scale = customScales[scaleName];
+    if (!scale) return getScaleMaps("default");
+    const maps = { tropical: new Map(), subtropical: new Map(), extratropical: new Map() };
+    scale.forEach(entry => {
+        const t = normalizeType(entry.type);
+        maps[t].set(Number(entry.cat), entry.color);
+    });
+    return maps;
 }
 
 // returns a single Map, optional type selects which map; default to tropical for legacy callers
 function getScaleMap(scaleName, type) {
-	const maps = getScaleMaps(scaleName);
-	if (!type) return maps.tropical;
-	const key = String(type).toLowerCase().startsWith("sub") ? "subtropical"
-		: String(type).toLowerCase().startsWith("extra") ? "extratropical"
-		: "tropical";
-	return maps[key] || maps.tropical;
+    const maps = getScaleMaps(scaleName);
+    if (!type) return maps.tropical;
+    const key = String(type).toLowerCase().startsWith("sub") ? "subtropical"
+        : String(type).toLowerCase().startsWith("extra") ? "extratropical"
+            : "tropical";
+    return maps[key] || maps.tropical;
 }
 
 function saveCustomScale(name, entries) {
-	customScales[name] = entries;
-	localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
+    customScales[name] = entries;
+    localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
 }
 
 function deleteCustomScale(name) {
-	delete customScales[name];
-	localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
+    delete customScales[name];
+    localStorage.setItem(SCALE_STORAGE_KEY, JSON.stringify(customScales));
 }
 
 function updateScaleSelector() {
-	const selector = document.getElementById("scale-selector");
-	selector.innerHTML = "";
-	getScaleList().forEach(name => {
-		const opt = document.createElement("option");
-		opt.value = name;
-		opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
-		selector.appendChild(opt);
-	});
-	selector.value = currentScale;
-	document.getElementById("delete-scale").style.display =
-		(currentScale !== "default" && currentScale !== "accessible") ? "" : "none";
+    const selector = document.getElementById("scale-selector");
+    selector.innerHTML = "";
+    getScaleList().forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+        selector.appendChild(opt);
+    });
+    selector.value = currentScale;
+    document.getElementById("delete-scale").style.display =
+        (currentScale !== "default" && currentScale !== "accessible") ? "" : "none";
 }
 
 function showScaleEditor(scaleName) {
-	const editor = document.getElementById("scale-editor");
-	const entriesDiv = document.getElementById("scale-entries");
-	const unit = document.getElementById("scale-speed-unit").value;
+    const editor = document.getElementById("scale-editor");
+    const entriesDiv = document.getElementById("scale-entries");
+    const unit = document.getElementById("scale-speed-unit").value;
 
-	entriesDiv.innerHTML = "";
-	const scale = customScales[scaleName] || [
-		{ cat: -999, color: "#C0C0C0", type: "tropical" }
-	];
+    entriesDiv.innerHTML = "";
+    const scale = customScales[scaleName] || [
+        { cat: -999, color: "#C0C0C0", type: "tropical" }
+    ];
 
-	(scale || []).forEach((entry, idx) => {
-		let speed = entry.cat;
-		if (speed !== -999) { // don't convert the placeholder!
-			if (unit === "mph") speed *= 1.15078;
-			else if (unit === "kph") speed *= 1.852;
-		}
+    (scale || []).forEach((entry, idx) => {
+        let speed = entry.cat;
+        if (speed !== -999) { // don't convert the placeholder!
+            if (unit === "mph") speed *= 1.15078;
+            else if (unit === "kph") speed *= 1.852;
+        }
 
-		const type = entry.type || "tropical"; // default to tropical
+        const type = entry.type || "tropical"; // default to tropical
 
-		const row = document.createElement("div");
-		row.innerHTML = `
+        const row = document.createElement("div");
+        row.innerHTML = `
 			<input type="number" value="${Math.round(speed * 100) / 100}" data-knots="${entry.cat}" class="scale-cat" style="width:60px;" />
 			<input type="color" value="${entry.color}" class="scale-color" />
 			<input type="text" value="${entry.color}" class="scale-color-hex" maxlength="7" />
@@ -139,48 +139,48 @@ function showScaleEditor(scaleName) {
 			</select>
 			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
 		`;
-		entriesDiv.appendChild(row);
-	});
-	document.getElementById("scale-name").value = scaleName || "";
+        entriesDiv.appendChild(row);
+    });
+    document.getElementById("scale-name").value = scaleName || "";
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-	updateScaleSelector();
-	showScaleEditor("");
+    updateScaleSelector();
+    showScaleEditor("");
 
-	document.getElementById("scale-selector").addEventListener("change", e => {
-		currentScale = e.target.value;
-		updateScaleSelector();
-		showScaleEditor(currentScale !== "default" && currentScale !== "accessible" ? currentScale : "");
-	});
+    document.getElementById("scale-selector").addEventListener("change", e => {
+        currentScale = e.target.value;
+        updateScaleSelector();
+        showScaleEditor(currentScale !== "default" && currentScale !== "accessible" ? currentScale : "");
+    });
 
-	document.getElementById("scale-speed-unit").addEventListener("change", () => {
-		const unit = document.getElementById("scale-speed-unit").value;
-		document.querySelectorAll("#scale-entries .scale-cat").forEach(input => {
-			let knots = parseFloat(input.dataset.knots);
-			if (knots === -999) return;
+    document.getElementById("scale-speed-unit").addEventListener("change", () => {
+        const unit = document.getElementById("scale-speed-unit").value;
+        document.querySelectorAll("#scale-entries .scale-cat").forEach(input => {
+            let knots = parseFloat(input.dataset.knots);
+            if (knots === -999) return;
 
-			let displaySpeed = knots;
-			if (unit === "mph") displaySpeed *= 1.15078;
-			else if (unit === "kph") displaySpeed *= 1.852;
-			
-			input.value = Math.round(displaySpeed * 100) / 100;
-		});
-	});
+            let displaySpeed = knots;
+            if (unit === "mph") displaySpeed *= 1.15078;
+            else if (unit === "kph") displaySpeed *= 1.852;
 
-	document.getElementById("delete-scale").addEventListener("click", () => {
-		if (currentScale in customScales) {
-			deleteCustomScale(currentScale);
-			currentScale = "default";
-			updateScaleSelector();
-			showScaleEditor("");
-		}
-	});
+            input.value = Math.round(displaySpeed * 100) / 100;
+        });
+    });
 
-	document.getElementById("add-scale-entry").addEventListener("click", () => {
-		const entriesDiv = document.getElementById("scale-entries");
-		const row = document.createElement("div");
-		row.innerHTML = `
+    document.getElementById("delete-scale").addEventListener("click", () => {
+        if (currentScale in customScales) {
+            deleteCustomScale(currentScale);
+            currentScale = "default";
+            updateScaleSelector();
+            showScaleEditor("");
+        }
+    });
+
+    document.getElementById("add-scale-entry").addEventListener("click", () => {
+        const entriesDiv = document.getElementById("scale-entries");
+        const row = document.createElement("div");
+        row.innerHTML = `
 			<input type="number" value="0" data-knots="0" class="scale-cat" style="width:60px;" />
 			<input type="color" value="#000000" class="scale-color" />
 			<input type="text" value="#000000" class="scale-color-hex" maxlength="7" />
@@ -191,66 +191,66 @@ document.addEventListener("DOMContentLoaded", () => {
 			</select>
 			<button type="button" class="remove-scale-entry">X</button>
 		`;
-		entriesDiv.appendChild(row);
-	});
+        entriesDiv.appendChild(row);
+    });
 
-	document.getElementById("scale-entries").addEventListener("input", e => {
-		const target = e.target;
-		if (target.classList.contains("scale-color")) {
-			target.nextElementSibling.value = target.value;
-		} else if (target.classList.contains("scale-color-hex")) {
-			const hexValue = target.value;
-			if (/^#[0-9a-f]{6}$/i.test(hexValue)) {
-				target.previousElementSibling.value = hexValue;
-			}
-		} else if (target.classList.contains("scale-cat")) {
-			const unit = document.getElementById("scale-speed-unit").value;
-			let speed = parseFloat(target.value);
-			if (unit === "mph") speed /= 1.15078;
-			else if (unit === "kph") speed /= 1.852;
-			target.dataset.knots = speed;
-		}
-	});
+    document.getElementById("scale-entries").addEventListener("input", e => {
+        const target = e.target;
+        if (target.classList.contains("scale-color")) {
+            target.nextElementSibling.value = target.value;
+        } else if (target.classList.contains("scale-color-hex")) {
+            const hexValue = target.value;
+            if (/^#[0-9a-f]{6}$/i.test(hexValue)) {
+                target.previousElementSibling.value = hexValue;
+            }
+        } else if (target.classList.contains("scale-cat")) {
+            const unit = document.getElementById("scale-speed-unit").value;
+            let speed = parseFloat(target.value);
+            if (unit === "mph") speed /= 1.15078;
+            else if (unit === "kph") speed /= 1.852;
+            target.dataset.knots = speed;
+        }
+    });
 
-	document.getElementById("scale-entries").addEventListener("click", e => {
-		if (e.target.classList.contains("remove-scale-entry")) {
-			e.target.parentElement.remove();
-		}
-	});
+    document.getElementById("scale-entries").addEventListener("click", e => {
+        if (e.target.classList.contains("remove-scale-entry")) {
+            e.target.parentElement.remove();
+        }
+    });
 
-	document.getElementById("save-scale").addEventListener("click", () => {
-		const name = document.getElementById("scale-name").value.trim();
-		if (!name || name === "default" || name === "accessible") {
-			alert("Invalid scale name.");
-			return;
-		}
+    document.getElementById("save-scale").addEventListener("click", () => {
+        const name = document.getElementById("scale-name").value.trim();
+        if (!name || name === "default" || name === "accessible") {
+            alert("Invalid scale name.");
+            return;
+        }
 
-		const unit = document.getElementById("scale-speed-unit").value;
+        const unit = document.getElementById("scale-speed-unit").value;
 
-		const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => {
-			const speedInput = div.querySelector(".scale-cat");
-			let speed = Number(speedInput.value);
-			
-			// convert speed to knots before saving
-			if (unit === "mph") speed /= 1.15078;
-			else if (unit === "kph") speed /= 1.852;
+        const entries = Array.from(document.querySelectorAll("#scale-entries > div")).map(div => {
+            const speedInput = div.querySelector(".scale-cat");
+            let speed = Number(speedInput.value);
 
-			return {
-				cat: speed,
-				color: div.querySelector(".scale-color").value,
-				type: div.querySelector(".scale-type").value
-			};
-		});
+            // convert speed to knots before saving
+            if (unit === "mph") speed /= 1.15078;
+            else if (unit === "kph") speed /= 1.852;
 
-		if (entries.length === 0) {
-			alert("Add at least one entry.");
-			return;
-		}
-		saveCustomScale(name, entries);
-		currentScale = name;
-		updateScaleSelector();
-		showScaleEditor(name);
-	});
+            return {
+                cat: speed,
+                color: div.querySelector(".scale-color").value,
+                type: div.querySelector(".scale-type").value
+            };
+        });
+
+        if (entries.length === 0) {
+            alert("Add at least one entry.");
+            return;
+        }
+        saveCustomScale(name, entries);
+        currentScale = name;
+        updateScaleSelector();
+        showScaleEditor(name);
+    });
 });
 
 class MapManager {
@@ -590,10 +590,10 @@ function computeACEByStorm(points) {
 }
 
 function renderACEResults(ace) {
-	const container = document.getElementById("ace-results");
-	if (!container) return;
-	container.classList.remove("hidden-2");
-	container.innerHTML = `
+    const container = document.getElementById("ace-results");
+    if (!container) return;
+    container.classList.remove("hidden-2");
+    container.innerHTML = `
 		<h3 style="margin:.25rem 0;">ACE</h3>
 		<div class="ace-total">Total: ${ace.totalAce}</div>
 		<ul class="ace-list">
@@ -615,7 +615,7 @@ function getPointType(point) {
         if (['EX', 'ET', 'LO', 'WV', 'DB', 'DS', 'MD', 'IN'].includes(s) || s.toLowerCase().startsWith("extra")) {
             return "extratropical";
         }
-        
+
         return "tropical";
     };
 
@@ -633,8 +633,10 @@ function createMap(data, accessible) {
     const imageContainer = elements.imageContainer;
     const smallerDotsCheckbox = document.getElementById("smaller-dots");
 
-    // Hide ACE panel while generating to avoid stale values
+    const computeAceCheckbox = document.getElementById("compute-ace");
+    const shouldComputeAce = computeAceCheckbox ? computeAceCheckbox.checked : true;
     const acePanel = document.getElementById("ace-results");
+    // always hide the ACE panel while generating; if ACE is disabled keep it hidden afterwards
     if (acePanel) acePanel.classList.add("hidden-2");
 
     closeButton.classList.remove("hidden");
@@ -868,6 +870,12 @@ function createMap(data, accessible) {
             try {
                 const ace = computeACEByStorm(data);
                 renderACEResults(ace);
+                if (shouldComputeAce) {
+                    const ace = computeACEByStorm(data);
+                    renderACEResults(ace);
+                } else {
+                    if (acePanel) acePanel.classList.add("hidden-2");
+                }
             } catch (e) {
                 console.warn("ACE calculation failed:", e);
             }
