@@ -84,6 +84,158 @@ document.querySelector('#new-point').addEventListener('click', () => {
 	newPoint.scrollIntoView({ behavior: 'smooth' });
 });
 
+// indexedDB autosave logic
+const AUTOSAVE_DB_NAME = "trackgen_autosave";
+const AUTOSAVE_STORE = "manual_input";
+let autosaveDB = null;
+
+// open IndexedDB and create object store if needed
+function openAutosaveDB() {
+	return new Promise((resolve, reject) => {
+		const req = indexedDB.open(AUTOSAVE_DB_NAME, 1);
+		req.onupgradeneeded = function(e) {
+			const db = e.target.result;
+			if (!db.objectStoreNames.contains(AUTOSAVE_STORE)) {
+				db.createObjectStore(AUTOSAVE_STORE);
+			}
+		};
+		req.onsuccess = function(e) {
+			autosaveDB = e.target.result;
+			resolve();
+		};
+		req.onerror = function(e) {
+			reject(e);
+		};
+	});
+}
+
+function saveAutosaveData(data) {
+	if (!autosaveDB) return;
+	const tx = autosaveDB.transaction([AUTOSAVE_STORE], "readwrite");
+	const store = tx.objectStore(AUTOSAVE_STORE);
+	store.put(data, "points");
+}
+
+function loadAutosaveData() {
+	return new Promise((resolve) => {
+		if (!autosaveDB) return resolve(null);
+		const tx = autosaveDB.transaction([AUTOSAVE_STORE], "readonly");
+		const store = tx.objectStore(AUTOSAVE_STORE);
+		const req = store.get("points");
+		req.onsuccess = () => resolve(req.result || null);
+		req.onerror = () => resolve(null);
+	});
+}
+
+function clearAutosaveData() {
+	if (!autosaveDB) return;
+	const tx = autosaveDB.transaction([AUTOSAVE_STORE], "readwrite");
+	const store = tx.objectStore(AUTOSAVE_STORE);
+	store.delete("points");
+}
+
+// collect all manual input points and relevant options, plus BT file input
+function collectInputData() {
+	const points = [];
+	document.querySelectorAll("#inputs .point").forEach(point => {
+		points.push({
+			name: point.querySelector(".name").value,
+			latitude: point.querySelector("input.latitude").value,
+			latitudeDir: point.querySelector("select.latitude").value,
+			longitude: point.querySelector("input.longitude").value,
+			longitudeDir: point.querySelector("select.longitude").value,
+			speed: point.querySelector("input.speed").value,
+			speedUnit: point.querySelector("select.speed").value,
+			stage: point.querySelector(".stage").value
+		});
+	});
+	const btTextarea = document.querySelector("#paste-upload textarea");
+	const fileFormat = document.querySelector("#file-format");
+	return {
+		points,
+		options: {
+			accessible: document.getElementById("accessible")?.checked || false,
+			computeAce: document.getElementById("compute-ace")?.checked || false,
+			smallerDots: document.getElementById("smaller-dots")?.checked || false,
+			autosave: document.getElementById("autosave")?.checked || false
+		},
+		bt: {
+			text: btTextarea?.value || "",
+			format: fileFormat?.value || ""
+		}
+	};
+}
+
+// restore manual input points, options, and BT file input
+function restoreInputData(data) {
+	if (data?.points && Array.isArray(data.points)) {
+		const container = document.getElementById("inputs");
+		container.innerHTML = "";
+		data.points.forEach((pt) => {
+			const clone = createNewPoint();
+			clone.querySelector(".name").value = pt.name || "";
+			clone.querySelector("input.latitude").value = pt.latitude || "";
+			clone.querySelector("select.latitude").value = pt.latitudeDir || "N";
+			clone.querySelector("input.longitude").value = pt.longitude || "";
+			clone.querySelector("select.longitude").value = pt.longitudeDir || "E";
+			clone.querySelector("input.speed").value = pt.speed || "";
+			clone.querySelector("select.speed").value = pt.speedUnit || "kph";
+			clone.querySelector(".stage").value = pt.stage || "Tropical cyclone";
+			container.appendChild(clone);
+		});
+	}
+	// restore options
+	if (data?.options) {
+		document.getElementById("accessible").checked = !!data.options.accessible;
+		document.getElementById("compute-ace").checked = !!data.options.computeAce;
+		document.getElementById("smaller-dots").checked = !!data.options.smallerDots;
+		document.getElementById("autosave").checked = !!data.options.autosave;
+	}
+	// restore BT file input
+	if (data?.bt) {
+		const btTextarea = document.querySelector("#paste-upload textarea");
+		const fileFormat = document.querySelector("#file-format");
+		if (btTextarea) btTextarea.value = data.bt.text || "";
+		if (fileFormat) fileFormat.value = data.bt.format || fileFormat.value;
+	}
+}
+
+// listen for changes to manual input, options, and BT file input, autosave if enabled
+function setupAutosaveListeners() {
+	const autosaveCheckbox = document.getElementById("autosave");
+	const saveIfEnabled = () => {
+		if (autosaveCheckbox?.checked) saveAutosaveData(collectInputData());
+	};
+	document.getElementById("inputs").addEventListener("input", saveIfEnabled);
+	document.getElementById("inputs").addEventListener("change", saveIfEnabled);
+	document.getElementById("accessible").addEventListener("change", saveIfEnabled);
+	document.getElementById("compute-ace").addEventListener("change", saveIfEnabled);
+	document.getElementById("smaller-dots").addEventListener("change", saveIfEnabled);
+	autosaveCheckbox.addEventListener("change", async () => {
+		if (autosaveCheckbox.checked) {
+			saveAutosaveData(collectInputData());
+		} else {
+			clearAutosaveData();
+		}
+	});
+	// BT file input listeners
+	const btTextarea = document.querySelector("#paste-upload textarea");
+	const fileFormat = document.querySelector("#file-format");
+	if (btTextarea) btTextarea.addEventListener("input", saveIfEnabled);
+	if (fileFormat) fileFormat.addEventListener("change", saveIfEnabled);
+}
+
+// on page load, restore autosave if enabled
+async function tryRestoreAutosaveOnLoad() {
+	await openAutosaveDB();
+	const autosaveCheckbox = document.getElementById("autosave");
+	if (autosaveCheckbox?.checked) {
+		const data = await loadAutosaveData();
+		if (data) restoreInputData(data);
+	}
+	setupAutosaveListeners();
+}
+
 // utilities
 function resetElement(el) {
 	if (el instanceof HTMLInputElement) el.value = '';
@@ -96,5 +248,6 @@ function init() {
 	document.querySelectorAll('select').forEach(s =>
 		s.setAttribute('data-selected', s.value)
 	);
+	tryRestoreAutosaveOnLoad();
 }
 init();
