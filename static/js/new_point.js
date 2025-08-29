@@ -44,8 +44,19 @@ function createNewPoint() {
 		select.setAttribute('data-selected', originalValue);
 	});
 
-	// clear input values
-	clone.querySelectorAll('input[type="number"]').forEach(input => input.value = '');
+	// preserve latitude/longitude numeric values from the last point
+	const lastLat = lastPoint?.querySelector('input.latitude')?.value || '';
+	const lastLon = lastPoint?.querySelector('input.longitude')?.value || '';
+	const latInput = clone.querySelector('input.latitude');
+	const lonInput = clone.querySelector('input.longitude');
+	if (latInput) latInput.value = lastLat;
+	if (lonInput) lonInput.value = lastLon;
+
+	// clear other numeric inputs (e.g., speed)
+	clone.querySelectorAll('input[type="number"]').forEach(input => {
+		if (input.classList.contains('latitude') || input.classList.contains('longitude')) return;
+		input.value = '';
+	});
 	return clone;
 }
 
