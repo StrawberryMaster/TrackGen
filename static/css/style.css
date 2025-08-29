@@ -446,19 +446,69 @@ ion-icon+span {
 	font-size: 20px;
 	margin: .5rem auto;
 	white-space: normal;
+	/* keep flex but allow wrapping so the scale section can be full width */
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	align-items: flex-start;
+	justify-content: space-between;
 }
 
-#options-container * {
-	vertical-align: middle;
-	margin: 1.25dvh 1.5dvh 1dvh auto;
+/* first two fieldsets (General options + Map settings) share the same row */
+#options-container fieldset:not(#custom-scale-section) {
+	flex: 1 1 calc(50% - 0.5rem);
+	min-width: 240px;
+}
+
+#options-container #custom-scale-section {
+	flex: 1 1 100%;
+	min-width: 280px;
+	order: 2;
+	margin-top: 0.2rem;
+}
+
+#options-container fieldset {
+    border: 1px solid var(--foreground-1);
+    border-radius: .5rem;
+    margin-bottom: 1rem;
+    padding: .5rem 1rem 1rem;
+}
+
+#options-container legend {
+    padding: 0 .5rem;
+    font-weight: bold;
+    color: var(--foreground-1);
 }
 
 #options-container label {
-	cursor: help;
+    cursor: help;
 }
 
-#options-container #custom-scale-section label {
-	cursor: default;
+/* spacing between labels and controls in options fieldsets */
+#options-container fieldset label,
+#options-container fieldset input[type="checkbox"],
+#options-container fieldset select,
+#options-container fieldset input[type="file"] {
+	margin-bottom: 0.3em;
+	margin-right: 0.4em;
+}
+
+#options-container fieldset label {
+	padding-left: 0.25em;
+	padding-right: 0.1em;
+}
+
+/* spacing between rows in fieldsets */
+#options-container fieldset > * {
+	margin-bottom: 0.4em;
+}
+
+#custom-scale-section {
+    border: 1px solid var(--foreground-1);
+    border-radius: .5rem;
+    margin: -1em 0;
+    padding: 1rem;
+    background-color: rgba(0, 0, 0, 0.1);
 }
 
 #map-selector {
@@ -868,6 +918,10 @@ ion-icon+span {
 		margin: .2rem 0;
 		padding: .5rem;
 		width: 100%;
+	}
+
+	#options-container {
+		display: block;
 	}
 }
 

@@ -295,61 +295,67 @@
 
 			</form>
 			<div id="options-container">
-				<input type="checkbox" id="accessible" /><label for="accessible"
-					title="Uses the new, accessible Wikipedia color scheme.">Use accessible colours</label><br />
-				<input type="checkbox" id="compute-ace" checked /><label for="compute-ace"
-					title="Compute and display ACE (may increase generation time).">Compute ACE</label><br />
-				<input type="checkbox" id="smaller-dots" /><label for="smaller-dots"
-					title="Uses smaller dot sizes on the generated maps. Intended for summary maps only.">Use
-					smaller dot sizes (summary maps only)</label><br />
-				<label for="map-selector"
-					title="Select map type (default is normal). Large and extra large maps are slower to generate.">
-					<ion-icon name="information-circle-outline" aria-hidden="true"
-						style="margin: .2rem 0; vertical-align: text-bottom"></ion-icon>
-					Select map type:</label>
-				<select id="map-selector">
-					<option value="normal" title="The original Blue Marble (2002) map.">Normal</option>
-					<option value="large" title="A larger version of the Blue Marble (2002) map.">Large</option>
-					<option value="xlarge"
-						title="A very large version of the Blue Marble (2002) map. Not recommended unless you're only a really fast connection.">
-						Extra large (slow)</option>
-					<option value="large-nxtgen"
-						title="Large version of the Blue Marble: Next Generation (July 2005) map.">Next Gen</option>
-					<option value="blkmar" title="A night light map, Black Marble (2016).">Black Marble</option>
-				</select>
-				<div id="custom-map-upload-section">
-					<label for="custom-map-upload" title="[EXPERIMENTAL] Upload a custom map of your choice.">
-						<ion-icon name="cloud-upload-outline" aria-hidden="true"
-							style="margin: .2rem 0; vertical-align: text-bottom"></ion-icon>
-						Upload custom map:</label>
-					<input type="file" id="custom-map-upload" accept="image/*">
-				</div>
-				<br />
-				<div id="custom-scale-section">
-					<label for="scale-selector">Category scale:</label>
-					<select id="scale-selector">
-						<option value="default">Default</option>
-						<option value="accessible">Accessible</option>
-					</select>
-					<button type="button" id="delete-scale" style="display:none;">Delete scale</button>
-					<div id="scale-editor" style="margin-top:1em;">
-						<h4>Create/edit custom scales</h4>
-						<div id="scale-speed-unit-selector">
-							<label for="scale-speed-unit">Speed unit:</label>
-							<select id="scale-speed-unit">
-								<option value="kt">kt</option>
-								<option value="mph">mph</option>
-								<option value="kph">kph</option>
-							</select>
-						</div>
-						<div id="scale-entries"></div>
-						<button type="button" id="add-scale-entry">Add entry</button>
-						<button type="button" id="save-scale">Save scale</button>
-						<input type="text" id="scale-name" placeholder="Scale name" />
-					</div>
-				</div>
-			</div>
-		</div>
+                <fieldset>
+                    <legend>General options</legend>
+                    <input type="checkbox" id="accessible" /><label for="accessible"
+                        title="Uses the new, accessible Wikipedia color scheme.">Use accessible colours</label><br />
+                    <input type="checkbox" id="compute-ace" checked /><label for="compute-ace"
+                        title="Compute and display ACE (may increase generation time).">Compute ACE</label><br />
+                    <input type="checkbox" id="smaller-dots" /><label for="smaller-dots"
+                        title="Uses smaller dot sizes on the generated maps. Intended for summary maps only.">Use
+                        smaller dot sizes (summary maps only)</label><br />
+                </fieldset>
+                <fieldset>
+                    <legend>Map settings</legend>
+                    <label for="map-selector"
+                        title="Select map type (default is normal). Large and extra large maps are slower to generate.">
+                        <ion-icon name="information-circle-outline" aria-hidden="true"
+                            style="margin: .2rem 0; vertical-align: text-bottom"></ion-icon>
+                        Select map type:</label>
+                    <select id="map-selector">
+                        <option value="normal" title="The original Blue Marble (2002) map.">Normal</option>
+                        <option value="large" title="A larger version of the Blue Marble (2002) map.">Large</option>
+                        <option value="xlarge"
+                            title="A very large version of the Blue Marble (2002) map. Not recommended unless you're only a really fast connection.">
+                            Extra large (slow)</option>
+                        <option value="large-nxtgen"
+                            title="Large version of the Blue Marble: Next Generation (July 2005) map.">Next Gen</option>
+                        <option value="blkmar" title="A night light map, Black Marble (2016).">Black Marble</option>
+                    </select>
+                    <div id="custom-map-upload-section">
+                        <label for="custom-map-upload" title="[EXPERIMENTAL] Upload a custom map of your choice.">
+                            <ion-icon name="cloud-upload-outline" aria-hidden="true"
+                                style="margin: .2rem 0; vertical-align: text-bottom"></ion-icon>
+                            Upload custom map:</label>
+                        <input type="file" id="custom-map-upload" accept="image/*">
+                    </div>
+                </fieldset>
+                <fieldset id="custom-scale-section">
+                    <legend>Scale settings</legend>
+                    <label for="scale-selector">Category scale:</label>
+                    <select id="scale-selector">
+                        <option value="default">Default</option>
+                        <option value="accessible">Accessible</option>
+                    </select>
+                    <button type="button" id="delete-scale" style="display:none;">Delete scale</button>
+                    <div id="scale-editor" style="margin-top:1em;">
+                        <h4>Create/edit custom scales</h4>
+                        <div id="scale-speed-unit-selector">
+                            <label for="scale-speed-unit">Speed unit:</label>
+                            <select id="scale-speed-unit">
+                                <option value="kt">kt</option>
+                                <option value="mph">mph</option>
+                                <option value="kph">kph</option>
+                            </select>
+                        </div>
+                        <div id="scale-entries"></div>
+                        <button type="button" id="add-scale-entry">Add entry</button>
+                        <button type="button" id="save-scale">Save scale</button>
+                        <input type="text" id="scale-name" placeholder="Scale name" />
+                    </div>
+                </fieldset>
+            </div>
+        </div>
 
 		<div class="page">
 			<div id="file-format-wrapper">
