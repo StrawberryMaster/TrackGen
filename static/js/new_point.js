@@ -236,6 +236,88 @@ async function tryRestoreAutosaveOnLoad() {
 	setupAutosaveListeners();
 }
 
+function clearAllData() {
+	// clear manual input points
+	const container = document.getElementById("inputs");
+	container.innerHTML = "";
+	const firstPoint = createNewPoint();
+	container.appendChild(firstPoint);
+
+	// clear BT file input
+	const btTextarea = document.querySelector("#paste-upload textarea");
+	if (btTextarea) btTextarea.value = "";
+
+	// reset file format selector
+	const fileFormat = document.querySelector("#file-format");
+	if (fileFormat) fileFormat.selectedIndex = 0;
+
+	// reset options
+	document.getElementById("accessible").checked = false;
+	document.getElementById("compute-ace").checked = false;
+	document.getElementById("smaller-dots").checked = false;
+
+	// clear autosave cache
+	clearAutosaveData();
+}
+
+let lastFocusedPointEl = null;
+function setupFocusTracking() {
+	// update lastFocusedPointEl when any input/select inside a point is focused or interacted with
+	document.addEventListener('focusin', (e) => {
+		const p = e.target.closest('.point');
+		if (p) lastFocusedPointEl = p;
+	});
+	// pointerdown helps catch the case where user clicks but focus hasn't changed yet
+	document.getElementById('inputs')?.addEventListener('pointerdown', (e) => {
+		const p = e.target.closest('.point');
+		if (p) lastFocusedPointEl = p;
+	});
+}
+
+function clearStormData() {
+	// find the storm name from the last-focused point element,
+	// otherwise fallback to the last point in the list
+	const points = document.querySelectorAll("#inputs .point");
+	if (points.length === 0) return;
+
+	let targetName = "";
+
+	if (lastFocusedPointEl) {
+		targetName = lastFocusedPointEl.querySelector(".name")?.value.trim() || "";
+	}
+
+	// fallback to last point's name
+	if (!targetName) {
+		const lastPoint = points[points.length - 1];
+		targetName = lastPoint.querySelector(".name")?.value.trim() || "";
+	}
+	if (!targetName) return;
+
+	// remove all points with this name
+	document.querySelectorAll("#inputs .point").forEach(point => {
+		if (point.querySelector(".name")?.value.trim() === targetName) {
+			point.remove();
+		}
+	});
+	// if no points left, add a blank one
+	if (document.querySelectorAll("#inputs .point").length === 0) {
+		document.getElementById("inputs").appendChild(createNewPoint());
+	}
+	// reset the tracked focus element (it may have been removed)
+	lastFocusedPointEl = null;
+
+	// save autosave state if enabled
+	const autosaveCheckbox = document.getElementById("autosave");
+	if (autosaveCheckbox?.checked) saveAutosaveData(collectInputData());
+}
+
+function setupClearButtons() {
+	const clearAllBtn = document.getElementById("clear-all-data");
+	const clearStormBtn = document.getElementById("clear-storm-data");
+	if (clearAllBtn) clearAllBtn.addEventListener("click", clearAllData);
+	if (clearStormBtn) clearStormBtn.addEventListener("click", clearStormData);
+}
+
 // utilities
 function resetElement(el) {
 	if (el instanceof HTMLInputElement) el.value = '';
@@ -249,5 +331,7 @@ function init() {
 		s.setAttribute('data-selected', s.value)
 	);
 	tryRestoreAutosaveOnLoad();
+	setupClearButtons();
+	setupFocusTracking(); // { Add: initialize focus tracking }
 }
 init();

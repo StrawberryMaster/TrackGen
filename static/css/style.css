@@ -428,7 +428,8 @@ ion-icon+span {
 	color: #fff;
 }
 
-#gens button, #gens-ie button {
+#gens button,
+#gens-ie button {
 	font-size: 2.5vh;
 	padding: 1.75vh 0;
 }
@@ -468,20 +469,20 @@ ion-icon+span {
 }
 
 #options-container fieldset {
-    border: 1px solid var(--foreground-1);
-    border-radius: .5rem;
-    margin-bottom: 1rem;
-    padding: .5rem 1rem 1rem;
+	border: 1px solid var(--foreground-1);
+	border-radius: .5rem;
+	margin-bottom: 1rem;
+	padding: .5rem 1rem 1rem;
 }
 
 #options-container legend {
-    padding: 0 .5rem;
-    font-weight: bold;
-    color: var(--foreground-1);
+	padding: 0 .5rem;
+	font-weight: bold;
+	color: var(--foreground-1);
 }
 
 #options-container label {
-    cursor: help;
+	cursor: help;
 }
 
 /* spacing between labels and controls in options fieldsets */
@@ -499,16 +500,16 @@ ion-icon+span {
 }
 
 /* spacing between rows in fieldsets */
-#options-container fieldset > * {
+#options-container fieldset>* {
 	margin-bottom: 0.4em;
 }
 
 #custom-scale-section {
-    border: 1px solid var(--foreground-1);
-    border-radius: .5rem;
-    margin: -1em 0;
-    padding: 1rem;
-    background-color: rgba(0, 0, 0, 0.1);
+	border: 1px solid var(--foreground-1);
+	border-radius: .5rem;
+	margin: -1em 0;
+	padding: 1rem;
+	background-color: rgba(0, 0, 0, 0.1);
 }
 
 #map-selector {
@@ -517,7 +518,8 @@ ion-icon+span {
 	padding: .2rem 0 .2rem .4rem;
 }
 
-#gens, #gens-ie {
+#gens,
+#gens-ie {
 	display: grid;
 }
 
@@ -526,12 +528,14 @@ ion-icon+span {
 	grid-template-columns: 1fr 1fr;
 }
 
-.export-column, .import-column {
+.export-column,
+.import-column {
 	flex: 1;
 	position: relative;
 }
 
-.export-column button, .import-column button {
+.export-column button,
+.import-column button {
 	width: 100%;
 }
 
@@ -599,7 +603,7 @@ ion-icon+span {
 #track-selector-container {
 	background: color-mix(in srgb, #fff 90%, var(--background-1));
 	border-radius: .5rem;
-	box-shadow: 0 0 10px rgba(0,0,0,0.3);
+	box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
 	left: 50%;
 	opacity: 0;
 	padding: 1rem;
@@ -673,12 +677,13 @@ ion-icon+span {
 	background-color: rgba(0, 0, 0, 0.1);
 }
 
-#custom-scale-section > label {
+#custom-scale-section>label {
 	font-weight: bold;
 	color: var(--foreground-1);
 }
 
-#scale-selector, #scale-name {
+#scale-selector,
+#scale-name {
 	border-radius: .25rem;
 	padding: 5px;
 	border: 1px solid #ccc;
@@ -743,7 +748,7 @@ ion-icon+span {
 	padding-right: .5rem;
 }
 
-#scale-entries > div {
+#scale-entries>div {
 	display: flex;
 	align-items: center;
 	gap: .5rem;
@@ -757,7 +762,9 @@ ion-icon+span {
 	margin: 0 1em;
 }
 
-.scale-cat, .scale-color, #scale-name {
+.scale-cat,
+.scale-color,
+#scale-name {
 	border: 1px solid #ccc;
 	border-radius: .25rem;
 	padding: 5px;
@@ -796,6 +803,7 @@ ion-icon+span {
 	border-radius: .25rem;
 	border: 1px solid #ccc;
 }
+
 .scale-color::-moz-color-swatch {
 	border-radius: .25rem;
 	border: 1px solid #ccc;
@@ -822,7 +830,8 @@ ion-icon+span {
 	color: #fff;
 }
 
-#add-scale-entry, #save-scale {
+#add-scale-entry,
+#save-scale {
 	background-color: var(--foreground-2);
 	color: #fff;
 	border: none;
@@ -834,13 +843,139 @@ ion-icon+span {
 	font-family: 'Fira Sans', sans-serif;
 }
 
-#add-scale-entry:hover, #save-scale:hover {
+#add-scale-entry:hover,
+#save-scale:hover {
 	background-color: color-mix(in srgb, var(--foreground-2) 80%, #000);
 }
 
 #scale-name {
 	padding: .4rem;
 	vertical-align: middle;
+}
+
+/* style for clear data buttons in options */
+#clear-all-data,
+#clear-storm-data {
+	display: inline-block;
+	background-color: #c00;
+	color: #fff;
+	border: none;
+	border-radius: .35rem;
+	padding: .35em 0.8em;
+	margin: 0.25em 0.4em 0.2em 0.4em;
+	font-size: 0.95em;
+	font-family: 'Fira Sans', sans-serif;
+	cursor: pointer;
+	transition: background-color .2s;
+}
+
+#clear-buttons-wrapper {
+	display: flex;
+	justify-content: center;
+	gap: 0.5em;
+	margin-top: 0.5em;
+	margin-bottom: 0.2em;
+}
+
+#clear-all-data:hover,
+#clear-storm-data:hover {
+	background-color: #f44336;
+	color: #fff;
+}
+
+
+
+/* ACE modal styles */
+#ace-results.ace-card {
+	position: fixed;
+	right: 1rem;
+	bottom: 1rem;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: .35rem;
+	padding: .75rem .9rem;
+	width: clamp(220px, 28vw, 340px);
+	max-height: min(46vh, 420px);
+	color: #fff;
+	background: rgba(24, 24, 24, 0.92);
+	backdrop-filter: blur(6px);
+	border-radius: .6rem;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+	border: 1px solid rgba(255, 255, 255, .08);
+}
+
+#ace-results.ace-card h3 {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	letter-spacing: .02em;
+	border-bottom: 1px solid rgba(255, 255, 255, .08);
+	padding-bottom: .35rem;
+}
+
+#ace-results .ace-total {
+	font-weight: 600;
+	color: #fbaf00;
+}
+
+#ace-results .ace-list {
+	list-style: none;
+	margin: .25rem 0 0 0;
+	padding: 0;
+	overflow: auto;
+	flex: 1 1 auto;
+}
+
+#ace-results .ace-list li {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: .5rem;
+	padding: .25rem 0;
+	border-bottom: 1px dashed rgba(255, 255, 255, .08);
+	font-size: .95rem;
+	line-height: 1.2;
+}
+
+#ace-results .ace-list li:last-child {
+	border-bottom: none;
+}
+
+#ace-results .ace-list li span {
+	opacity: .75;
+	font-size: .85em;
+	white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+	#ace-results.ace-card {
+		left: .75rem;
+		right: .75rem;
+		bottom: .75rem;
+		width: auto;
+		max-height: 40vh;
+		padding: .65rem .75rem;
+	}
+}
+
+@media (prefers-color-scheme: light) {
+	#ace-results.ace-card {
+		color: #111;
+		background: rgba(255, 255, 255, .95);
+		border: 1px solid rgba(0, 0, 0, .08);
+	}
+
+	#ace-results .ace-list li {
+		border-bottom-color: rgba(0, 0, 0, .08);
+	}
+}
+
+#clear-buttons-wrapper {
+	display: flex;
+	justify-content: center;
+	gap: 1rem;
+	margin-top: .5em;
 }
 
 @media screen and (max-width: 800px) {
@@ -960,11 +1095,15 @@ ion-icon+span {
 		background-color: #4a4e69;
 	}
 
-	#scale-entries > div {
+	#scale-entries>div {
 		background: #6b7091;
 	}
 
-	.scale-cat, #scale-selector, #scale-name, .scale-color-hex, #scale-speed-unit {
+	.scale-cat,
+	#scale-selector,
+	#scale-name,
+	.scale-color-hex,
+	#scale-speed-unit {
 		background-color: #fff;
 		color: #000;
 		border: 1px solid #999;
