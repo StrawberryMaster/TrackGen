@@ -641,6 +641,22 @@ function createMap(data, accessible) {
     const imageContainer = elements.imageContainer;
     const smallerDotsCheckbox = document.getElementById("smaller-dots");
 
+    // size multipliers
+    const dotSizeInput = document.getElementById("dot-size-mult");
+    const dotSizeNumber = document.getElementById("dot-size-mult-num");
+    const lineSizeInput = document.getElementById("line-size-mult");
+    const lineSizeNumber = document.getElementById("line-size-mult-num");
+
+    // keep UI synced
+    if (dotSizeInput && dotSizeNumber) {
+        dotSizeInput.addEventListener('input', () => dotSizeNumber.value = dotSizeInput.value);
+        dotSizeNumber.addEventListener('input', () => dotSizeInput.value = dotSizeNumber.value);
+    }
+    if (lineSizeInput && lineSizeNumber) {
+        lineSizeInput.addEventListener('input', () => lineSizeNumber.value = lineSizeInput.value);
+        lineSizeNumber.addEventListener('input', () => lineSizeInput.value = lineSizeNumber.value);
+    }
+
     const useCustomBounds = document.getElementById("enable-custom-bounds")?.checked;
 
     const computeAceCheckbox = document.getElementById("compute-ace");
@@ -685,8 +701,13 @@ function createMap(data, accessible) {
 
             const dotSizeFactor = smallerDotsCheckbox.checked ? 2.35 / Math.PI : 1;
             const lineSizeFactor = smallerDotsCheckbox.checked ? 1.5 / Math.PI : 1;
-            const DOT_SIZE = (0.29890625 / 360) * FULL_WIDTH * dotSizeFactor;
-            const LINE_SIZE = (0.09 / 360) * FULL_WIDTH * lineSizeFactor;
+
+            // apply user multipliers if present
+            const dotMultiplier = parseFloat(dotSizeInput?.value) || parseFloat(dotSizeNumber?.value) || 1;
+            const lineMultiplier = parseFloat(lineSizeInput?.value) || parseFloat(lineSizeNumber?.value) || 1;
+
+            const DOT_SIZE = (0.29890625 / 360) * FULL_WIDTH * dotSizeFactor * dotMultiplier;
+            const LINE_SIZE = (0.09 / 360) * FULL_WIDTH * lineSizeFactor * lineMultiplier;
 
             let minLat = Infinity, maxLat = -Infinity;
             let minRawLng = Infinity, maxRawLng = -Infinity;
