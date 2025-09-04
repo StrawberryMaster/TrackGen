@@ -494,6 +494,35 @@ ion-icon+span {
 	margin-right: 0.4em;
 }
 
+#custom-bounds-inputs {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+	padding: 0.5rem;
+	background-color: rgba(0, 0, 0, 0.05);
+	border-radius: 0.25rem;
+}
+
+#custom-bounds-inputs>div {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+#custom-bounds-inputs label {
+	font-size: 0.9em;
+	flex-shrink: 0;
+}
+
+#custom-bounds-inputs input[type="number"] {
+	width: 100%;
+	padding: 5px;
+	border: 1px solid #ccc;
+	border-radius: .25rem;
+	font-family: 'Roboto Mono', monospace;
+}
+
 #options-container fieldset label {
 	padding-left: 0.25em;
 	padding-right: 0.1em;

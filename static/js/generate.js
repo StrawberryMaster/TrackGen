@@ -251,6 +251,14 @@ document.addEventListener("DOMContentLoaded", () => {
         updateScaleSelector();
         showScaleEditor(name);
     });
+
+    const customBoundsCheckbox = document.getElementById("enable-custom-bounds");
+    const customBoundsInputs = document.getElementById("custom-bounds-inputs");
+    if (customBoundsCheckbox && customBoundsInputs) {
+        customBoundsCheckbox.addEventListener("change", (e) => {
+            customBoundsInputs.classList.toggle("hidden", !e.target.checked);
+        });
+    }
 });
 
 class MapManager {
@@ -633,6 +641,8 @@ function createMap(data, accessible) {
     const imageContainer = elements.imageContainer;
     const smallerDotsCheckbox = document.getElementById("smaller-dots");
 
+    const useCustomBounds = document.getElementById("enable-custom-bounds")?.checked;
+
     const computeAceCheckbox = document.getElementById("compute-ace");
     const shouldComputeAce = computeAceCheckbox ? computeAceCheckbox.checked : true;
     const acePanel = document.getElementById("ace-results");
@@ -713,44 +723,65 @@ function createMap(data, accessible) {
                 westernmostLng -= 360; // adjust back if westernmost was shifted
             }
 
-            const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
-            const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
+            let left, right, top, bottom;
 
-            const halfLngDist = Math.max(
-                Math.abs(normalizeLongitude(easternmostLng - centerLng)),
-                Math.abs(normalizeLongitude(westernmostLng - centerLng))
-            ) * FULL_WIDTH / 360;
-            const paddingLng = (FULL_WIDTH * 5) / 360;
-            let left = centerX - halfLngDist - paddingLng;
-            let right = centerX + halfLngDist + paddingLng;
+            if (useCustomBounds) {
+                const minLatInput = parseFloat(document.getElementById("min-lat").value);
+                const maxLatInput = parseFloat(document.getElementById("max-lat").value);
+                const minLngInput = parseFloat(document.getElementById("min-lng").value);
+                const maxLngInput = parseFloat(document.getElementById("max-lng").value);
 
-            let top = minLat - (FULL_HEIGHT * 5) / 180;
-            let bottom = maxLat + (FULL_HEIGHT * 5) / 180;
+                if (!isNaN(minLatInput) && !isNaN(maxLatInput) && !isNaN(minLngInput) && !isNaN(maxLngInput)) {
+                    top = FULL_HEIGHT / 2 - (maxLatInput * FULL_HEIGHT / 180);
+                    bottom = FULL_HEIGHT / 2 - (minLatInput * FULL_HEIGHT / 180);
+                    left = (minLngInput + 180) / 360 * FULL_WIDTH;
+                    right = (maxLngInput + 180) / 360 * FULL_WIDTH;
+                }
+            }
+            
+            if (left === undefined) { // fallback to auto-cropping if custom bounds are not set or invalid
+                const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
+                const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
 
-            let width = right - left;
-            let height = bottom - top;
+                const halfLngDist = Math.max(
+                    Math.abs(normalizeLongitude(easternmostLng - centerLng)),
+                    Math.abs(normalizeLongitude(westernmostLng - centerLng))
+                ) * FULL_WIDTH / 360;
+                const paddingLng = (FULL_WIDTH * 5) / 360;
+                left = centerX - halfLngDist - paddingLng;
+                right = centerX + halfLngDist + paddingLng;
 
-            const minWidth = (FULL_HEIGHT * 45) / 180;
-            if (width < minWidth) {
-                const padding = (minWidth - width) / 2;
-                left -= padding;
-                right += padding;
-                width = right - left;
+                top = minLat - (FULL_HEIGHT * 5) / 180;
+                bottom = maxLat + (FULL_HEIGHT * 5) / 180;
+
+                let width = right - left;
+                let height = bottom - top;
+
+                const minWidth = (FULL_HEIGHT * 45) / 180;
+                if (width < minWidth) {
+                    const padding = (minWidth - width) / 2;
+                    left -= padding;
+                    right += padding;
+                    width = right - left;
+                }
+
+                if (width < height) {
+                    const padding = (height - width) / 2;
+                    left -= padding;
+                    right += padding;
+                    width = right - left;
+                }
+
+                if (height < width / 1.618033988749894) {
+                    const padding = (width / 1.618033988749894 - height) / 2;
+                    top -= padding;
+                    bottom += padding;
+                    height = bottom - top;
+                }
             }
 
-            if (width < height) {
-                const padding = (height - width) / 2;
-                left -= padding;
-                right += padding;
-                width = right - left;
-            }
-
-            if (height < width / 1.618033988749894) {
-                const padding = (width / 1.618033988749894 - height) / 2;
-                top -= padding;
-                bottom += padding;
-                height = bottom - top;
-            }
+            const width = right - left;
+            const height = bottom - top;
 
             canvas.width = width;
             canvas.height = height;

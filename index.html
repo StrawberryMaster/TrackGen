@@ -249,6 +249,20 @@
                             Upload custom map:</label>
                         <input type="file" id="custom-map-upload" accept="image/*">
                     </div>
+                    <div>
+                        <input type="checkbox" id="enable-custom-bounds" /><label for="enable-custom-bounds"
+                            title="[EXPERIMENTAL] Define custom map boundaries instead of auto-cropping.">Use custom map boundaries</label>
+                    </div>
+                    <div id="custom-bounds-inputs" class="hidden">
+                        <div>
+                            <label for="min-lat">Min lat:</label><input type="number" id="min-lat" step="any" min="-90" max="90">
+                            <label for="max-lat">Max lat:</label><input type="number" id="max-lat" step="any" min="-90" max="90">
+                        </div>
+                        <div>
+                            <label for="min-lng">Min lng:</label><input type="number" id="min-lng" step="any" min="-180" max="180">
+                            <label for="max-lng">Max lng:</label><input type="number" id="max-lng" step="any" min="-180" max="180">
+                        </div>
+                    </div>
                 </fieldset>
                 <fieldset id="custom-scale-section">
                     <legend>Scale settings</legend>
