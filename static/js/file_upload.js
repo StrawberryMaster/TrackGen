@@ -81,20 +81,24 @@ const ensureRawUrl = (url) => {
 };
 
 domElements.fileInput.addEventListener("change", (e) => {
-	const file = e.target.files[0];
-	if (!file) return;
+	const files = Array.from(e.target.files);
+	if (!files.length) return;
 
-	const fr = new FileReader();
-	fr.onload = (evt) => {
-		try {
-			mapFromFile(evt.target.result,
-				domElements.fileFormat.getAttribute("data-selected").toLowerCase(),
-				domElements.accessible.checked
-			);
-		} finally {
-			domElements.fileInput.value = "";
-		}
-	};
-	fr.onerror = () => alert("Zoinks! File could not be read.");
-	fr.readAsText(file, "UTF-8");
+	files.forEach(file => {
+		const fr = new FileReader();
+		fr.onload = (evt) => {
+			try {
+				mapFromFile(evt.target.result,
+					domElements.fileFormat.getAttribute("data-selected").toLowerCase(),
+					domElements.accessible.checked
+				);
+			} finally {
+				if (file === files[files.length - 1]) {
+					domElements.fileInput.value = "";
+				}
+			}
+		};
+		fr.onerror = () => alert("Zoinks! File could not be read.");
+		fr.readAsText(file, "UTF-8");
+	});
 });
