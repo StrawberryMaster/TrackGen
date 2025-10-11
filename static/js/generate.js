@@ -747,62 +747,111 @@ function createMap(data, accessible) {
             let left, right, top, bottom;
 
             if (useCustomBounds) {
-                const minLatInput = parseFloat(document.getElementById("min-lat").value);
-                const maxLatInput = parseFloat(document.getElementById("max-lat").value);
-                const minLngInput = parseFloat(document.getElementById("min-lng").value);
-                const maxLngInput = parseFloat(document.getElementById("max-lng").value);
+                let minLatInput = parseFloat(document.getElementById("min-lat").value);
+                let maxLatInput = parseFloat(document.getElementById("max-lat").value);
+                let minLngInput = parseFloat(document.getElementById("min-lng").value);
+                let maxLngInput = parseFloat(document.getElementById("max-lng").value);
 
-                if (!isNaN(minLatInput) && !isNaN(maxLatInput) && !isNaN(minLngInput) && !isNaN(maxLngInput)) {
+                const validNumbers = ![minLatInput, maxLatInput, minLngInput, maxLngInput].some(v => Number.isNaN(v));
+                if (validNumbers) {
+                    // normalize and clamp latitudes to [-90,90]
+                    minLatInput = Object.is(minLatInput, -0) ? 0 : minLatInput;
+                    maxLatInput = Object.is(maxLatInput, -0) ? 0 : maxLatInput;
+                    minLatInput = Math.max(-90, Math.min(90, minLatInput));
+                    maxLatInput = Math.max(-90, Math.min(90, maxLatInput));
+
+                    minLngInput = Object.is(minLngInput, -0) ? 0 : minLngInput;
+                    maxLngInput = Object.is(maxLngInput, -0) ? 0 : maxLngInput;
+                    // let longitudes wrap around and clamp to [-180,180]
+                    minLngInput = Math.max(-180, Math.min(180, minLngInput));
+                    maxLngInput = Math.max(-180, Math.min(180, maxLngInput));
+
+                    // ensure min <= max for latitudes
+                    if (minLatInput > maxLatInput) {
+                        const tmp = minLatInput;
+                        minLatInput = maxLatInput;
+                        maxLatInput = tmp;
+                    }
+
+                    // calc top/bottom in pixel space
                     top = FULL_HEIGHT / 2 - (maxLatInput * FULL_HEIGHT / 180);
                     bottom = FULL_HEIGHT / 2 - (minLatInput * FULL_HEIGHT / 180);
-                    left = (minLngInput + 180) / 360 * FULL_WIDTH;
-                    right = (maxLngInput + 180) / 360 * FULL_WIDTH;
+
+                    // IDL checks
+                    const lonToX = (lng) => (lng + 180) / 360 * FULL_WIDTH;
+                    if (minLngInput <= maxLngInput) {
+                        left = lonToX(minLngInput);
+                        right = lonToX(maxLngInput);
+                    } else {
+                        left = lonToX(minLngInput);
+                        right = lonToX(maxLngInput) + FULL_WIDTH;
+                    }
+
+                    const proposedWidth = right - left;
+                    const proposedHeight = bottom - top;
+                    const MAX_WIDTH = FULL_WIDTH * 2;
+                    const MAX_HEIGHT = FULL_HEIGHT;
+
+                    if (!(proposedWidth > 0 && proposedHeight > 0 && proposedWidth <= MAX_WIDTH && proposedHeight <= MAX_HEIGHT)) {
+                        console.warn("Custom bounds invalid or out of range; falling back to auto-crop.", {
+                            minLatInput, maxLatInput, minLngInput, maxLngInput,
+                            proposedWidth, proposedHeight, MAX_WIDTH, MAX_HEIGHT
+                        });
+                        left = undefined;
+                    } else {
+                        left = Math.max(0, left);
+                        right = Math.min(FULL_WIDTH * 2, right);
+                        top = Math.max(-FULL_HEIGHT, top);
+                        bottom = Math.min(FULL_HEIGHT * 2, bottom);
+                    }
                 }
-            }
-            
-            if (left === undefined) { // fallback to auto-cropping if custom bounds are not set or invalid
-                const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
-                const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
-
-                const halfLngDist = Math.max(
-                    Math.abs(normalizeLongitude(easternmostLng - centerLng)),
-                    Math.abs(normalizeLongitude(westernmostLng - centerLng))
-                ) * FULL_WIDTH / 360;
-                const paddingLng = (FULL_WIDTH * 5) / 360;
-                left = centerX - halfLngDist - paddingLng;
-                right = centerX + halfLngDist + paddingLng;
-
-                top = minLat - (FULL_HEIGHT * 5) / 180;
-                bottom = maxLat + (FULL_HEIGHT * 5) / 180;
-
-                let width = right - left;
-                let height = bottom - top;
-
-                const minWidth = (FULL_HEIGHT * 45) / 180;
-                if (width < minWidth) {
-                    const padding = (minWidth - width) / 2;
-                    left -= padding;
-                    right += padding;
-                    width = right - left;
-                }
-
-                if (width < height) {
-                    const padding = (height - width) / 2;
-                    left -= padding;
-                    right += padding;
-                    width = right - left;
-                }
-
-                if (height < width / 1.618033988749894) {
-                    const padding = (width / 1.618033988749894 - height) / 2;
-                    top -= padding;
-                    bottom += padding;
-                    height = bottom - top;
-                }
-            }
-
-            const width = right - left;
-            const height = bottom - top;
+             }
+             
+             if (left === undefined) { // fallback to auto-cropping if custom bounds are not set or invalid
+                 const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
+                 const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
+ 
+                 const halfLngDist = Math.max(
+                     Math.abs(normalizeLongitude(easternmostLng - centerLng)),
+                     Math.abs(normalizeLongitude(westernmostLng - centerLng))
+                 ) * FULL_WIDTH / 360;
+                 const paddingLng = (FULL_WIDTH * 5) / 360;
+                 left = centerX - halfLngDist - paddingLng;
+                 right = centerX + halfLngDist + paddingLng;
+ 
+                 top = minLat - (FULL_HEIGHT * 5) / 180;
+                 bottom = maxLat + (FULL_HEIGHT * 5) / 180;
+ 
+                 let width = right - left;
+                 let height = bottom - top;
+ 
+                 const minWidth = (FULL_HEIGHT * 45) / 180;
+                 if (width < minWidth) {
+                     const padding = (minWidth - width) / 2;
+                     left -= padding;
+                     right += padding;
+                     width = right - left;
+                 }
+ 
+                 if (width < height) {
+                     const padding = (height - width) / 2;
+                     left -= padding;
+                     right += padding;
+                     width = right - left;
+                 }
+ 
+                 if (height < width / 1.618033988749894) {
+                     const padding = (width / 1.618033988749894 - height) / 2;
+                     top -= padding;
+                     bottom += padding;
+                     height = bottom - top;
+                 }
+             }
+ 
+            let width = Math.floor(right - left);
+            let height = Math.floor(bottom - top);
+            width = Math.max(1, Math.min(width, FULL_WIDTH * 2));
+            height = Math.max(1, Math.min(height, FULL_HEIGHT));
 
             canvas.width = width;
             canvas.height = height;
