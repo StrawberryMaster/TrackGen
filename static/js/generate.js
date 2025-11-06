@@ -593,21 +593,62 @@ function computeACEByStorm(points) {
         totalRaw += rawAce;
     });
 
-    storms.sort((a, b) => b.ace - a.ace);
     return { totalAce: +totalRaw.toFixed(4), storms };
 }
 
-function renderACEResults(ace) {
+function sortStormsByNumber(storms) {
+    return [...storms].sort((a, b) => {
+        const numA = parseInt(a.name.match(/\d+/)?.[0] || '9999');
+        const numB = parseInt(b.name.match(/\d+/)?.[0] || '9999');
+        
+        if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB;
+        }
+        
+        return a.name.localeCompare(b.name);
+    });
+}
+
+function sortStormsByACE(storms) {
+    return [...storms].sort((a, b) => b.ace - a.ace);
+}
+
+function renderACEResults(ace, sortByNumber = true) {
     const container = document.getElementById("ace-results");
     if (!container) return;
+    
+    const sortedStorms = sortByNumber ? sortStormsByNumber(ace.storms) : sortStormsByACE(ace.storms);
+    const sortIcon = sortByNumber ? '🔢' : '📊';
+    const sortLabel = sortByNumber ? 'by number' : 'by ACE';
+    const nextSort = sortByNumber ? 'ACE' : 'number';
+    
     container.classList.remove("hidden-2");
     container.innerHTML = `
-		<h3 style="margin:.25rem 0;">ACE</h3>
-		<div class="ace-total">Total: ${ace.totalAce}</div>
-		<ul class="ace-list">
-			${ace.storms.map(s => `<li>${s.name || "Unnamed"}: ${s.ace} <span>(pts: ${s.tsPoints}/${s.points})</span></li>`).join("")}
-		</ul>
-	`;
+        <h3 style="margin:.25rem 0; display:flex; justify-content:space-between; align-items:center;">
+            <span>ACE</span>
+            <button id="ace-sort-toggle" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:.3rem; color:inherit; cursor:pointer; font-size:.75em; padding:.2rem .4rem; transition:background .2s;" title="Sort by ${nextSort}">
+                ${sortIcon} ${sortLabel}
+            </button>
+        </h3>
+        <div class="ace-total">Total: ${ace.totalAce}</div>
+        <ul class="ace-list">
+            ${sortedStorms.map(s => `<li>${s.name || "Unnamed"}: ${s.ace} <span>(pts: ${s.tsPoints}/${s.points})</span></li>`).join("")}
+        </ul>
+    `;
+    
+    // click handler for the sort toggle button
+    const sortToggle = document.getElementById("ace-sort-toggle");
+    if (sortToggle) {
+        sortToggle.addEventListener("click", () => {
+            renderACEResults(ace, !sortByNumber);
+        });
+        sortToggle.addEventListener("mouseenter", (e) => {
+            e.target.style.background = "rgba(255,255,255,0.2)";
+        });
+        sortToggle.addEventListener("mouseleave", (e) => {
+            e.target.style.background = "rgba(255,255,255,0.1)";
+        });
+    }
 }
 
 // determine point type (tropical/subtropical/extratropical) from available fields
