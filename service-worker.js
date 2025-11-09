@@ -4,37 +4,37 @@ const cacheName = `${appPrefix}-${appVersion}`;
 
 // static list of files to cache
 const filesToCache = [
-    '/',
-    '/index.html',
-    '/manifest.webmanifest',
+    './',
+    './index.html',
+    './manifest.webmanifest',
     
     // CSS
-    '/static/css/style.css',
+    './static/css/style.css',
     
     // JS
-    '/static/js/sw.js',
-    '/static/js/pages.js',
-    '/static/js/generate.js',
-    '/static/js/new_point.js',
-    '/static/js/atcf.js',
-    '/static/js/rsmc.js',
-    '/static/js/hurdat.js',
-    '/static/js/ibtracs.js',
-    '/static/js/storms.js',
-    '/static/js/file_upload.js',
-    '/static/js/manual_input.js',
-    '/static/js/export.js',
-    '/static/js/export-hurdat.js',
+    './static/js/sw.js',
+    './static/js/pages.js',
+    './static/js/generate.js',
+    './static/js/new_point.js',
+    './static/js/atcf.js',
+    './static/js/rsmc.js',
+    './static/js/hurdat.js',
+    './static/js/ibtracs.js',
+    './static/js/storms.js',
+    './static/js/file_upload.js',
+    './static/js/manual_input.js',
+    './static/js/export.js',
+    './static/js/export-hurdat.js',
     
     // media (exclude large maps)
-    '/static/media/favicon.png',
-    '/static/media/cyclone.png',
-    '/static/media/background.png',
-    '/static/media/background-dark.png',
-    '/static/media/bg8192.png',
-    '/static/media/bg12000.jpg',
-    '/static/media/bg13500-blkmar.jpg',
-    '/static/media/bg21600-nxtgen.jpg'
+    './static/media/favicon.png',
+    './static/media/cyclone.png',
+    './static/media/background.png',
+    './static/media/background-dark.png',
+    './static/media/bg8192.png',
+    './static/media/bg12000.jpg',
+    './static/media/bg13500-blkmar.jpg',
+    './static/media/bg21600-nxtgen.jpg'
 ];
 
 function isImage(request) {
@@ -43,7 +43,13 @@ function isImage(request) {
 
 function isCachable(request) {
     const url = new URL(request.url);
-    return url.origin === location.origin && filesToCache.includes(url.pathname);
+    if (url.origin !== location.origin) return false;
+    
+    // normalize pathname for comparison
+    const pathname = url.pathname.replace(/^\/TrackGen/, '') || '/';
+    const relativePath = './' + pathname.replace(/^\//, '');
+    
+    return filesToCache.includes(relativePath) || filesToCache.includes(pathname);
 }
 
 async function staleWhileRevalidate(request) {
