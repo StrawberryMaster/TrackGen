@@ -1,38 +1,41 @@
 const appPrefix = 'TrackGen';
 const appVersion = 'v1.0.9';
 const cacheName = `${appPrefix}-${appVersion}`;
-const foldersToCache = ['media', 'js', 'css'];
-const additionalCache = ['/', 'manifest.json', 'index.html'];
 
-let filesToCache = [];
-
-async function generateFilesToCache() {
-    filesToCache = [];
-
-    for (const folder of foldersToCache) {
-        try {
-            const response = await fetch(`/${folder}/`);
-            if (!response.ok) {
-                console.error(`Failed to fetch ${folder} folder: ${response.statusText}`);
-                continue;
-            }
-            const folderFiles = await response.text();
-            const regex = /href="([^"]+\.(png|jpg|jpeg|jxl|webp|js|css))"/g;
-            let match;
-
-            while ((match = regex.exec(folderFiles)) !== null) {
-                if (match[1] !== 'bg16383.webp') {
-                    filesToCache.push(`/${folder}/${match[1]}`);
-                }
-            }
-        } catch (error) {
-            console.error(`Error fetching files from ${folder}:`, error);
-        }
-    }
-
-    filesToCache.push(...additionalCache);
-    return filesToCache;
-}
+// static list of files to cache
+const filesToCache = [
+    '/',
+    '/index.html',
+    '/manifest.webmanifest',
+    
+    // CSS
+    '/static/css/style.css',
+    
+    // JS
+    '/static/js/sw.js',
+    '/static/js/pages.js',
+    '/static/js/generate.js',
+    '/static/js/new_point.js',
+    '/static/js/atcf.js',
+    '/static/js/rsmc.js',
+    '/static/js/hurdat.js',
+    '/static/js/ibtracs.js',
+    '/static/js/storms.js',
+    '/static/js/file_upload.js',
+    '/static/js/manual_input.js',
+    '/static/js/export.js',
+    '/static/js/export-hurdat.js',
+    
+    // media (exclude large maps)
+    '/static/media/favicon.png',
+    '/static/media/cyclone.png',
+    '/static/media/background.png',
+    '/static/media/background-dark.png',
+    '/static/media/bg8192.png',
+    '/static/media/bg12000.jpg',
+    '/static/media/bg13500-blkmar.jpg',
+    '/static/media/bg21600-nxtgen.jpg'
+];
 
 function isImage(request) {
     return request.destination === 'image' || request.url.match(/\.(png|jpg|jpeg|webp|gif)$/i);
@@ -40,7 +43,7 @@ function isImage(request) {
 
 function isCachable(request) {
     const url = new URL(request.url);
-    return filesToCache && url.origin === location.origin && filesToCache.includes(url.pathname);
+    return url.origin === location.origin && filesToCache.includes(url.pathname);
 }
 
 async function staleWhileRevalidate(request) {
@@ -81,12 +84,10 @@ async function cacheFirstWithRefresh(request) {
 
 self.addEventListener('install', event => {
     event.waitUntil(
-        generateFilesToCache().then(files => {
-            return caches.open(cacheName).then(cache => {
-                return cache.addAll(files);
-            });
+        caches.open(cacheName).then(cache => {
+            return cache.addAll(filesToCache);
         }).catch(error => {
-            console.error('Failed to generate files to cache:', error);
+            console.error('Failed to cache files during install:', error);
         })
     );
 });
