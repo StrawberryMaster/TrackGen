@@ -447,7 +447,6 @@ ion-icon+span {
 	font-size: 20px;
 	margin: .5rem auto;
 	white-space: normal;
-	/* keep flex but allow wrapping so the scale section can be full width */
 	display: flex;
 	flex-wrap: wrap;
 	gap: 1rem;
@@ -465,14 +464,14 @@ ion-icon+span {
 	flex: 1 1 100%;
 	min-width: 280px;
 	order: 2;
-	margin-top: 0.2rem;
+	margin-top: 0;
 }
 
 #options-container fieldset {
 	border: 1px solid var(--foreground-1);
 	border-radius: .5rem;
 	margin-bottom: 1rem;
-	padding: .5rem 1rem 1rem;
+	padding: .25rem 1rem 1rem;
 }
 
 #options-container legend {
@@ -483,6 +482,7 @@ ion-icon+span {
 
 #options-container label {
 	cursor: help;
+	display: inline-block;
 }
 
 /* spacing between labels and controls in options fieldsets */
@@ -490,8 +490,19 @@ ion-icon+span {
 #options-container fieldset input[type="checkbox"],
 #options-container fieldset select,
 #options-container fieldset input[type="file"] {
-	margin-bottom: 0.3em;
-	margin-right: 0.4em;
+	margin-bottom: 0.5rem;
+	margin-right: 0.5rem;
+}
+
+/* Ensure consistent line-height for all form elements */
+#options-container fieldset input[type="checkbox"] {
+	vertical-align: middle;
+	margin-top: 0;
+}
+
+#options-container fieldset select {
+	padding: .2rem;
+	vertical-align: middle;
 }
 
 #custom-bounds-inputs {
@@ -499,7 +510,7 @@ ion-icon+span {
 	flex-direction: column;
 	gap: 0.5rem;
 	margin-top: 0.5rem;
-	padding: 0.5rem;
+	padding: 0.75rem;
 	background-color: rgba(0, 0, 0, 0.05);
 	border-radius: 0.25rem;
 }
@@ -513,32 +524,40 @@ ion-icon+span {
 #custom-bounds-inputs label {
 	font-size: 0.9em;
 	flex-shrink: 0;
+	min-width: 80px;
 }
 
 #custom-bounds-inputs input[type="number"] {
 	width: 100%;
-	padding: 5px;
+	padding: 5px 8px;
 	border: 1px solid #ccc;
 	border-radius: .25rem;
 	font-family: 'Roboto Mono', monospace;
 }
 
 #options-container fieldset label {
-	padding-left: 0.25em;
-	padding-right: 0.1em;
+	padding-left: 0;
+	padding-right: 0;
 }
 
 /* spacing between rows in fieldsets */
 #options-container fieldset>* {
-	margin-bottom: 0.4em;
+	margin-bottom: 0.5rem;
+}
+
+#options-container fieldset>*:last-child {
+	margin-bottom: 0;
 }
 
 #custom-scale-section {
 	border: 1px solid var(--foreground-1);
 	border-radius: .5rem;
-	margin: -1em 0;
+	margin: 0;
 	padding: 1rem;
 	background-color: rgba(0, 0, 0, 0.1);
+}
+#custom-scale-section select {
+	margin: 0;
 }
 
 #map-selector {
@@ -701,7 +720,7 @@ ion-icon+span {
 #custom-scale-section {
 	border: 1px solid var(--foreground-1);
 	border-radius: .5rem;
-	margin: -1em 0;
+	margin: 0;
 	padding: 1rem;
 	background-color: rgba(0, 0, 0, 0.1);
 }
@@ -747,13 +766,13 @@ ion-icon+span {
 }
 
 #scale-editor h4 {
-	margin-bottom: .5rem;
+	margin-bottom: .75rem;
 	font-family: "Fira Sans", sans-serif;
 	color: var(--foreground-1);
 }
 
 #scale-speed-unit-selector {
-	margin-bottom: .5rem;
+	margin-bottom: .75rem;
 }
 
 #scale-speed-unit-selector label {
@@ -780,15 +799,15 @@ ion-icon+span {
 #scale-entries>div {
 	display: flex;
 	align-items: center;
-	gap: .5rem;
+	gap: 0.5rem;
 	margin-bottom: .5rem;
 	background: rgba(0, 0, 0, 0.1);
-	padding: .5rem;
+	padding: .75rem;
 	border-radius: .25rem;
 }
 
 #scale-entries input {
-	margin: 0 1em;
+	margin: 0;
 }
 
 .scale-cat,
@@ -901,18 +920,10 @@ ion-icon+span {
 #clear-buttons-wrapper {
 	display: flex;
 	justify-content: center;
-	gap: 0.5em;
-	margin-top: 0.5em;
-	margin-bottom: 0.2em;
+	gap: 0.5rem;
+	margin-top: 0.5rem;
+	margin-bottom: 0;
 }
-
-#clear-all-data:hover,
-#clear-storm-data:hover {
-	background-color: #f44336;
-	color: #fff;
-}
-
-
 
 /* ACE modal styles */
 #ace-results.ace-card {
@@ -1136,5 +1147,9 @@ ion-icon+span {
 		background-color: #fff;
 		color: #000;
 		border: 1px solid #999;
+	}
+
+	#custom-bounds-inputs {
+		background-color: rgba(0, 0, 0, 0.15);
 	}
 }
