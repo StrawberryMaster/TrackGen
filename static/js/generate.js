@@ -113,10 +113,11 @@ function showScaleEditor(scaleName) {
     const entriesDiv = document.getElementById("scale-entries");
     const unit = document.getElementById("scale-speed-unit").value;
 
-    entriesDiv.innerHTML = "";
     const scale = customScales[scaleName] || [
         { cat: -999, color: "#C0C0C0", type: "tropical" }
     ];
+
+    const fragment = document.createDocumentFragment();
 
     (scale || []).forEach((entry, idx) => {
         let speed = entry.cat;
@@ -139,8 +140,10 @@ function showScaleEditor(scaleName) {
 			</select>
 			<button type="button" class="remove-scale-entry" data-idx="${idx}">X</button>
 		`;
-        entriesDiv.appendChild(row);
+        fragment.appendChild(row);
     });
+    entriesDiv.innerHTML = "";
+    entriesDiv.appendChild(fragment);
     document.getElementById("scale-name").value = scaleName || "";
 }
 
@@ -307,8 +310,12 @@ class MapManager {
 
         if (this.state.offscreenCanvasSupported) {
             this.canvas = new OffscreenCanvas(1, 1);
+            
+            this.tempCanvas = document.createElement("canvas");
+            this.tempCtx = this.tempCanvas.getContext("2d");
         } else {
             this.canvas = document.createElement("canvas");
+            this.tempCanvas = null; 
         }
 
         this.handleMapChange = this.handleMapChange.bind(this);
@@ -540,16 +547,23 @@ class MapManager {
 
     toDataURL() {
         if (this.state.offscreenCanvasSupported) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = this.canvas.width;
-            tempCanvas.height = this.canvas.height;
-            const tempCtx = tempCanvas.getContext('2d');
+            if (this.tempCanvas.width !== this.canvas.width || 
+                this.tempCanvas.height !== this.canvas.height) {
+                
+                this.tempCanvas.width = this.canvas.width;
+                this.tempCanvas.height = this.canvas.height;
+                
+            } else {
+                this.tempCtx.clearRect(0, 0, this.tempCanvas.width, this.tempCanvas.height);
+            }
 
             const bitmap = this.transferToImageBitmap();
-            tempCtx.drawImage(bitmap, 0, 0);
-            bitmap.close();
+            
+            this.tempCtx.drawImage(bitmap, 0, 0);
+            
+            bitmap.close(); 
 
-            return tempCanvas.toDataURL();
+            return this.tempCanvas.toDataURL();
         } else {
             return this.canvas.toDataURL();
         }
@@ -578,14 +592,16 @@ function coordToDecimal(coord) {
 }
 
 // haversine formula: distance in kilometers between two lat/lon points
+const R_EARTH = 6371.0;
+const DEG_TO_RAD = Math.PI / 180;
+
 function haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => deg * Math.PI / 180;
-    const R = 6371.0; // Earth's radius in km
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const dLat = (lat2 - lat1) * DEG_TO_RAD;
+    const dLon = (lon2 - lon1) * DEG_TO_RAD;
+    const a = Math.sin(dLat * 0.5) ** 2 +
+        Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) *
+        Math.sin(dLon * 0.5) ** 2;
+    return R_EARTH * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ACE + track length calculator
@@ -657,11 +673,11 @@ function sortStormsByNumber(storms) {
     return [...storms].sort((a, b) => {
         const numA = parseInt(a.name.match(/\d+/)?.[0] || '9999');
         const numB = parseInt(b.name.match(/\d+/)?.[0] || '9999');
-        
+
         if (!isNaN(numA) && !isNaN(numB)) {
             return numA - numB;
         }
-        
+
         return a.name.localeCompare(b.name);
     });
 }
@@ -730,25 +746,24 @@ function renderACEResults(ace, sortByNumber = true) {
 }
 
 // determine point type (tropical/subtropical/extratropical) from available fields
+const TYPE_MAPPING = {
+    ss: "subtropical", sd: "subtropical", st: "subtropical", sub: "subtropical",
+    ex: "extratropical", et: "extratropical", lo: "extratropical", wv: "extratropical",
+    db: "extratropical", ds: "extratropical", md: "extratropical", in: "extratropical",
+    extra: "extratropical"
+};
+
 function getPointType(point) {
-    const normalizeType = (t) => {
-        if (!t) return "tropical";
-        const s = String(t).trim().toUpperCase();
+    const raw = (point.type || point.stage || "").trim().toLowerCase();
+    if (!raw) return "tropical";
 
-        if (['SS', 'SD', 'ST'].includes(s) || s.toLowerCase().startsWith("sub")) {
-            return "subtropical";
-        }
+    // check direct map
+    if (TYPE_MAPPING[raw]) return TYPE_MAPPING[raw];
 
-        if (['EX', 'ET', 'LO', 'WV', 'DB', 'DS', 'MD', 'IN'].includes(s) || s.toLowerCase().startsWith("extra")) {
-            return "extratropical";
-        }
+    // check prefixes
+    if (raw.startsWith("sub")) return "subtropical";
+    if (raw.startsWith("extra")) return "extratropical";
 
-        return "tropical";
-    };
-
-    // prefer explicit type, then stage text, fallback to tropical
-    if (point.type) return normalizeType(point.type);
-    if (point.stage) return normalizeType(point.stage);
     return "tropical";
 }
 
@@ -924,49 +939,49 @@ function createMap(data, accessible) {
                         bottom = Math.min(FULL_HEIGHT * 2, bottom);
                     }
                 }
-             }
-             
-             if (left === undefined) { // fallback to auto-cropping if custom bounds are not set or invalid
-                 const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
-                 const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
- 
-                 const halfLngDist = Math.max(
-                     Math.abs(normalizeLongitude(easternmostLng - centerLng)),
-                     Math.abs(normalizeLongitude(westernmostLng - centerLng))
-                 ) * FULL_WIDTH / 360;
-                 const paddingLng = (FULL_WIDTH * 5) / 360;
-                 left = centerX - halfLngDist - paddingLng;
-                 right = centerX + halfLngDist + paddingLng;
- 
-                 top = minLat - (FULL_HEIGHT * 5) / 180;
-                 bottom = maxLat + (FULL_HEIGHT * 5) / 180;
- 
-                 let width = right - left;
-                 let height = bottom - top;
- 
-                 const minWidth = (FULL_HEIGHT * 45) / 180;
-                 if (width < minWidth) {
-                     const padding = (minWidth - width) / 2;
-                     left -= padding;
-                     right += padding;
-                     width = right - left;
-                 }
- 
-                 if (width < height) {
-                     const padding = (height - width) / 2;
-                     left -= padding;
-                     right += padding;
-                     width = right - left;
-                 }
- 
-                 if (height < width / 1.618033988749894) {
-                     const padding = (width / 1.618033988749894 - height) / 2;
-                     top -= padding;
-                     bottom += padding;
-                     height = bottom - top;
-                 }
-             }
- 
+            }
+
+            if (left === undefined) { // fallback to auto-cropping if custom bounds are not set or invalid
+                const centerLng = normalizeLongitude((easternmostLng + westernmostLng) / 2);
+                const centerX = (centerLng + 180) / 360 * FULL_WIDTH;
+
+                const halfLngDist = Math.max(
+                    Math.abs(normalizeLongitude(easternmostLng - centerLng)),
+                    Math.abs(normalizeLongitude(westernmostLng - centerLng))
+                ) * FULL_WIDTH / 360;
+                const paddingLng = (FULL_WIDTH * 5) / 360;
+                left = centerX - halfLngDist - paddingLng;
+                right = centerX + halfLngDist + paddingLng;
+
+                top = minLat - (FULL_HEIGHT * 5) / 180;
+                bottom = maxLat + (FULL_HEIGHT * 5) / 180;
+
+                let width = right - left;
+                let height = bottom - top;
+
+                const minWidth = (FULL_HEIGHT * 45) / 180;
+                if (width < minWidth) {
+                    const padding = (minWidth - width) / 2;
+                    left -= padding;
+                    right += padding;
+                    width = right - left;
+                }
+
+                if (width < height) {
+                    const padding = (height - width) / 2;
+                    left -= padding;
+                    right += padding;
+                    width = right - left;
+                }
+
+                if (height < width / 1.618033988749894) {
+                    const padding = (width / 1.618033988749894 - height) / 2;
+                    top -= padding;
+                    bottom += padding;
+                    height = bottom - top;
+                }
+            }
+
             let width = Math.floor(right - left);
             let height = Math.floor(bottom - top);
             width = Math.max(1, Math.min(width, FULL_WIDTH * 2));
@@ -1019,16 +1034,18 @@ function createMap(data, accessible) {
             const drawTracks = () => {
                 ctx.lineWidth = LINE_SIZE;
                 ctx.strokeStyle = "white";
+                ctx.lineCap = "round";
+                ctx.lineJoin = "round";
+
+                ctx.beginPath();
 
                 Object.values(namedTracks).forEach(track => {
-                    if (track.length < 1) return;
+                    if (track.length < 2) return;
 
-                    track.forEach((point, index) => {
-                        if (index === 0) return;
+                    for (let i = 1; i < track.length; i++) {
+                        const prevPoint = track[i - 1];
+                        const point = track[i];
 
-                        ctx.beginPath();
-                        const prevPoint = track[index - 1];
-                        let currX = point.longitude;
                         let currY = point.latitude;
                         let rawDx = normalizeLongitude(point.rawLongitude - prevPoint.rawLongitude);
 
@@ -1036,46 +1053,66 @@ function createMap(data, accessible) {
                             rawDx = rawDx > 0 ? rawDx - 360 : rawDx + 360;
                         }
 
-                        currX = prevPoint.longitude + (rawDx * FULL_WIDTH / 360);
+                        // calculate where the line should go visually relative to the previous point
+                        const targetX = prevPoint.longitude + (rawDx * FULL_WIDTH / 360);
 
                         ctx.moveTo(prevPoint.longitude, prevPoint.latitude);
-                        ctx.lineTo(currX, currY);
+                        ctx.lineTo(targetX, currY);
 
                         if (crossesIDL) {
-                            if (currX < 0) {
+                            // if the line goes off the left edge, draw a copy on the right side
+                            if (targetX < 0) {
                                 ctx.moveTo(prevPoint.longitude + FULL_WIDTH, prevPoint.latitude);
-                                ctx.lineTo(currX + FULL_WIDTH, currY);
-                            } else if (currX > width) {
+                                ctx.lineTo(targetX + FULL_WIDTH, currY);
+                            }
+                            // if the line goes off the right edge, draw a copy on the left side
+                            else if (targetX > width) {
                                 ctx.moveTo(prevPoint.longitude - FULL_WIDTH, prevPoint.latitude);
-                                ctx.lineTo(currX - FULL_WIDTH, currY);
+                                ctx.lineTo(targetX - FULL_WIDTH, currY);
                             }
                         }
-
-                        ctx.stroke();
-                    });
+                    }
                 });
+
+                ctx.stroke();
             };
 
             const drawPoints = () => {
                 pointGroups.forEach((points, key) => {
                     const [color, shape] = key.split('|');
                     ctx.fillStyle = color;
+                    ctx.beginPath();
 
-                    const drawShapeFunc = shapeDrawers[shape] || shapeDrawers.circle;
+                    const isCircle = !shapeDrawers[shape] || shape === 'circle';
 
-                    points.forEach(({ longitude: x, latitude: y }) => {
-                        const drawPoint = (drawX) => {
-                            ctx.beginPath();
-                            drawShapeFunc(ctx, drawX, y, DOT_SIZE);
-                            ctx.fill();
-                        };
+                    // for circles
+                    if (isCircle) {
+                        points.forEach(({ longitude: x, latitude: y }) => {
+                            const addCircle = (cx) => {
+                                ctx.moveTo(cx + DOT_SIZE, y);
+                                ctx.arc(cx, y, DOT_SIZE, 0, 2 * Math.PI);
+                            };
 
-                        drawPoint(x);
-                        if (crossesIDL && (x - FULL_WIDTH >= 0 || x + FULL_WIDTH < width)) {
-                            drawPoint(x - FULL_WIDTH);
-                            drawPoint(x + FULL_WIDTH);
-                        }
-                    });
+                            addCircle(x);
+                            if (crossesIDL) {
+                                if (x - FULL_WIDTH >= 0) addCircle(x - FULL_WIDTH);
+                                if (x + FULL_WIDTH < width) addCircle(x + FULL_WIDTH);
+                            }
+                        });
+                    } else {
+                        // for triangles/squares
+                        const drawFunc = shapeDrawers[shape];
+                        points.forEach(({ longitude: x, latitude: y }) => {
+                            const addShape = (cx) => drawFunc(ctx, cx, y, DOT_SIZE);
+                            addShape(x);
+                            if (crossesIDL) {
+                                if (x - FULL_WIDTH >= 0) addShape(x - FULL_WIDTH);
+                                if (x + FULL_WIDTH < width) addShape(x + FULL_WIDTH);
+                            }
+                        });
+                    }
+
+                    ctx.fill();
                 });
             };
 
