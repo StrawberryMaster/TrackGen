@@ -555,7 +555,6 @@ class MapManager {
     }
 }
 
-// Usage
 const mapManager = new MapManager();
 
 function normalizeLongitude(lng) {
@@ -711,7 +710,7 @@ function renderACEResults(ace, sortByNumber = true) {
         </ul>
     `;
 
-    // Sort toggle handler
+    // sort toggle handler
     const sortToggle = document.getElementById("ace-sort-toggle");
     if (sortToggle) {
         sortToggle.addEventListener("click", () => {
@@ -719,7 +718,7 @@ function renderACEResults(ace, sortByNumber = true) {
         });
     }
 
-    // Length toggle handler
+    // length toggle handler
     const lengthToggle = document.getElementById("ace-show-length");
     if (lengthToggle) {
         lengthToggle.addEventListener("change", (e) => {
