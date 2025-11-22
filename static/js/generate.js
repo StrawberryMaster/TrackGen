@@ -562,7 +562,33 @@ function normalizeLongitude(lng) {
     return ((lng + 180) % 360 + 360) % 360 - 180;
 }
 
-// ACE helpers
+// utilities: convert lat/lon strings (ex.: "12.3N") to signed decimal degrees
+function coordToDecimal(coord) {
+    if (!coord || typeof coord !== 'string') return NaN;
+    const s = coord.trim();
+    if (!s.length) return NaN;
+    const last = s.slice(-1).toUpperCase();
+    const hasDir = ['N', 'S', 'E', 'W'].includes(last);
+    let val = parseFloat(hasDir ? s.slice(0, -1) : s);
+    if (isNaN(val)) return NaN;
+    if (hasDir) {
+        if (last === 'S' || last === 'W') val = -Math.abs(val);
+    }
+    return val;
+}
+
+// haversine formula: distance in kilometers between two lat/lon points
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const toRad = (deg) => deg * Math.PI / 180;
+    const R = 6371.0; // Earth's radius in km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// ACE + track length calculator
 function computeACEByStorm(points) {
     const groups = points.reduce((acc, p) => {
         const k = p.name || "Unnamed";
@@ -571,9 +597,14 @@ function computeACEByStorm(points) {
     }, {});
     const storms = [];
     let totalRaw = 0;
+    let totalLengthKm = 0;
 
     Object.entries(groups).forEach(([name, arr]) => {
         let sum = 0, pts = 0, tsPts = 0;
+        // for length calc we parse coords to decimals and compute distances between consecutive valid points
+        let lengthKm = 0;
+        let prevLat = NaN, prevLon = NaN;
+
         arr.forEach(p => {
             const v = Number(p.speed);
             if (!Number.isFinite(v)) return;
@@ -586,14 +617,40 @@ function computeACEByStorm(points) {
                 sum += v5 * v5;
                 tsPts++;
             }
+
+            // length: parse coordinates and compute distance from previous point
+            const lat = coordToDecimal(p.latitude);
+            const lon = coordToDecimal(p.longitude);
+            if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                if (Number.isFinite(prevLat) && Number.isFinite(prevLon)) {
+                    lengthKm += haversineKm(prevLat, prevLon, lat, lon);
+                }
+                prevLat = lat;
+                prevLon = lon;
+            } else {
+                // if coordinate invalid, reset prev to avoid incorrect jump
+                prevLat = NaN;
+                prevLon = NaN;
+            }
         });
+
         const rawAce = sum / 10000;
         const ace = +rawAce.toFixed(4);
-        storms.push({ name, ace, points: pts, tsPoints: tsPts });
+        const lengthNm = +(lengthKm / 1.852).toFixed(2);
+
+        storms.push({
+            name,
+            ace,
+            points: pts,
+            tsPoints: tsPts,
+            lengthKm: +lengthKm.toFixed(2),
+            lengthNm
+        });
         totalRaw += rawAce;
+        totalLengthKm += lengthKm;
     });
 
-    return { totalAce: +totalRaw.toFixed(4), storms };
+    return { totalAce: +totalRaw.toFixed(4), totalLengthKm: +totalLengthKm.toFixed(2), totalLengthNm: +(totalLengthKm / 1.852).toFixed(2), storms };
 }
 
 function sortStormsByNumber(storms) {
@@ -616,37 +673,58 @@ function sortStormsByACE(storms) {
 function renderACEResults(ace, sortByNumber = true) {
     const container = document.getElementById("ace-results");
     if (!container) return;
-    
+
+    const showLengthPref = JSON.parse(localStorage.getItem("ace_show_length") || "false");
+
     const sortedStorms = sortByNumber ? sortStormsByNumber(ace.storms) : sortStormsByACE(ace.storms);
     const sortIcon = sortByNumber ? '🔢' : '📊';
     const sortLabel = sortByNumber ? 'by number' : 'by ACE';
     const nextSort = sortByNumber ? 'ACE' : 'number';
-    
+
     container.classList.remove("hidden-2");
     container.innerHTML = `
-        <h3 style="margin:.25rem 0; display:flex; justify-content:space-between; align-items:center;">
-            <span>ACE</span>
-            <button id="ace-sort-toggle" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); border-radius:.3rem; color:inherit; cursor:pointer; font-size:.75em; padding:.2rem .4rem; transition:background .2s;" title="Sort by ${nextSort}">
-                ${sortIcon} ${sortLabel}
-            </button>
+        <h3 class="ace-header">
+            <span class="ace-title">ACE</span>
+            <div class="ace-controls">
+                <label>
+                    <input type="checkbox" id="ace-show-length" ${showLengthPref ? "checked" : ""} /> <span style="margin-left:.25rem">Show length</span>
+                </label>
+                <button id="ace-sort-toggle" class="ace-sort-toggle" title="Sort by ${nextSort}">
+                    ${sortIcon} ${sortLabel}
+                </button>
+            </div>
         </h3>
-        <div class="ace-total">Total: ${ace.totalAce}</div>
+
+        <div class="ace-total">Total ACE: ${ace.totalAce}</div>
+        ${showLengthPref ? `<div class="ace-total-length">Total length: ${ace.totalLengthKm} km (${ace.totalLengthNm} nm)</div>` : ''}
         <ul class="ace-list">
-            ${sortedStorms.map(s => `<li>${s.name || "Unnamed"}: ${s.ace} <span>(pts: ${s.tsPoints}/${s.points})</span></li>`).join("")}
+            ${sortedStorms.map(s => `
+                <li class="ace-storm-item">
+                    <div>
+                        <strong>${s.name || "Unnamed"}</strong>
+                        <span style="margin-left:.5rem;">${s.ace}</span>
+                        <span style="opacity:.75; margin-left:.5rem;">(pts: ${s.tsPoints}/${s.points})</span>
+                    </div>
+                    ${showLengthPref ? `<div class="ace-storm-length">Length: ${s.lengthKm} km (${s.lengthNm} nm)</div>` : ''}
+                </li>
+            `).join("")}
         </ul>
     `;
-    
-    // click handler for the sort toggle button
+
+    // Sort toggle handler
     const sortToggle = document.getElementById("ace-sort-toggle");
     if (sortToggle) {
         sortToggle.addEventListener("click", () => {
             renderACEResults(ace, !sortByNumber);
         });
-        sortToggle.addEventListener("mouseenter", (e) => {
-            e.target.style.background = "rgba(255,255,255,0.2)";
-        });
-        sortToggle.addEventListener("mouseleave", (e) => {
-            e.target.style.background = "rgba(255,255,255,0.1)";
+    }
+
+    // Length toggle handler
+    const lengthToggle = document.getElementById("ace-show-length");
+    if (lengthToggle) {
+        lengthToggle.addEventListener("change", (e) => {
+            localStorage.setItem("ace_show_length", JSON.stringify(e.target.checked));
+            renderACEResults(ace, sortByNumber);
         });
     }
 }
@@ -1010,8 +1088,7 @@ function createMap(data, accessible) {
             output.classList.remove("hidden");
 
             try {
-                const ace = computeACEByStorm(data);
-                renderACEResults(ace);
+                // only compute and render ACE + length if user requested it
                 if (shouldComputeAce) {
                     const ace = computeACEByStorm(data);
                     renderACEResults(ace);

@@ -969,6 +969,7 @@ ion-icon+span {
 
 #ace-results .ace-list li {
 	display: flex;
+	flex-flow: column;
 	justify-content: space-between;
 	align-items: baseline;
 	gap: .5rem;
@@ -986,6 +987,60 @@ ion-icon+span {
 	opacity: .75;
 	font-size: .85em;
 	white-space: nowrap;
+}
+
+/* ACE header and controls */
+#ace-results .ace-header {
+    margin: .25rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+}
+
+#ace-results .ace-controls {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+}
+
+#ace-results .ace-controls label {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .85em;
+    opacity: .9;
+    padding-right: .5rem;
+}
+
+#ace-results .ace-sort-toggle {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: .3rem;
+    color: inherit;
+    cursor: pointer;
+    font-size: .75em;
+    padding: .2rem .4rem;
+    transition: background .2s;
+}
+#ace-results .ace-sort-toggle:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+#ace-results .ace-total-length {
+    font-size: .9em;
+    opacity: .9;
+    margin-top: .25rem;
+}
+
+#ace-results .ace-storm-item {
+    margin-bottom: .5rem;
+}
+
+#ace-results .ace-storm-length {
+    margin-top: .25rem;
+    opacity: .85;
+    font-size: .9em;
 }
 
 @media (max-width: 640px) {
