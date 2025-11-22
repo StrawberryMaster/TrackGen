@@ -255,8 +255,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const customBoundsCheckbox = document.getElementById("enable-custom-bounds");
     const customBoundsInputs = document.getElementById("custom-bounds-inputs");
     if (customBoundsCheckbox && customBoundsInputs) {
+        customBoundsInputs.classList.toggle("show", customBoundsCheckbox.checked);
         customBoundsCheckbox.addEventListener("change", (e) => {
-            customBoundsInputs.classList.toggle("hidden", !e.target.checked);
+            customBoundsInputs.classList.toggle("show", e.target.checked);
         });
     }
 });
