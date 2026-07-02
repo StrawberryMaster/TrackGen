@@ -7,8 +7,6 @@
 	<title>TrackGen</title>
 	<meta name="author" content="Coding-Cactus, StrawberryMaster">
 	<meta name="description" content="Generate track maps from tropical cyclone data">
-	<meta name="keywords"
-		content="trackgen, track generator, tropical cyclone, track map, hurricane, typhoon, cyclone, storm, weather, meteorology, data visualization, open source">
 	<meta name="theme-color" content="#fbaf00">
 	<meta name="title" content="TrackGen">
 
@@ -17,6 +15,7 @@
 	<meta property="og:image" content="https://strawberrymaster.github.io/TrackGen/static/media/cyclone.png">
 	<meta property="og:url" content="https://strawberrymaster.github.io/TrackGen/">
 	<meta property="og:description" content="Generate track maps from tropical cyclone data.">
+    <meta property="og:locale" content="en_US">
 
 	<meta name="twitter:card" content="summary_large_image">
 	<meta name="twitter:title" content="TrackGen">
@@ -27,6 +26,41 @@
 	<link href="static/media/favicon.png" rel="icon" />
 	<link rel="manifest" href="manifest.webmanifest" crossorigin="anonymous">
 	<link rel="canonical" href="https://strawberrymaster.github.io/TrackGen/" />
+
+	<script type="application/ld+json">
+	{
+	"@context": "https://schema.org",
+	"@type": "WebApplication",
+	"name": "TrackGen",
+	"url": "https://strawberrymaster.github.io/TrackGen/",
+	"description": "Generate track maps from tropical cyclone data.",
+	"applicationCategory": "UtilityApplication",
+	"operatingSystem": "All",
+	"browserRequirements": "Requires JavaScript. Requires HTML5.",
+	"image": "https://strawberrymaster.github.io/TrackGen/static/media/cyclone.png",
+	"screenshot": "https://strawberrymaster.github.io/TrackGen/static/media/cyclone.png",
+	"codeRepository": "https://github.com/StrawberryMaster/TrackGen",
+	"author": [
+		{
+		"@type": "Person",
+		"name": "Coding-Cactus",
+		"url": "https://github.com/Coding-Cactus"
+		},
+		{
+		"@type": "Person",
+		"name": "StrawberryMaster",
+		"url": "https://github.com/StrawberryMaster"
+		}
+	],
+	"featureList": [
+		"Manual cyclone data entry",
+		"BT File parser supporting HURDAT, ATCF, IBTrACS, RSMC, and STORMS formats",
+		"Customizable track map sizes, styles, and boundaries",
+		"Data export in standard JSON and HURDAT formats",
+		"Accumulated Cyclone Energy (ACE) calculation"
+	]
+	}
+	</script>
 </head>
 
 <body>
