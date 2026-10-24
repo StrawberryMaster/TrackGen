@@ -310,7 +310,7 @@
                 </fieldset>
                 <fieldset id="custom-scale-section">
                     <legend>Scale settings</legend>
-                    <label for="scale-selector">Category scale:</label>
+                    <label for="scale-selector">Color scale:</label>
                     <select id="scale-selector">
                         <option value="default">Default</option>
                         <option value="accessible">Accessible</option>
@@ -325,6 +325,14 @@
                                 <option value="mph">mph</option>
                                 <option value="kph">kph</option>
                             </select>
+                        </div>
+                        <div id="scale-base-selector">
+                            <label for="scale-base">Start from:</label>
+                            <select id="scale-base">
+                                <option value="default">Default scale</option>
+                                <option value="accessible">Accessible scale</option>
+                            </select>
+                            <p class="scale-help">Add only the speeds where a new color should begin. All other categories keep the selected scale's colors.</p>
                         </div>
                         <div id="scale-entries"></div>
                         <button type="button" id="add-scale-entry">Add entry</button>

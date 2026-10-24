@@ -18,15 +18,12 @@ const STAGE_SHAPE_MAP = {
 };
 
 function speedToCat(speed) {
-	// use custom scale if selected
-	if (typeof getScaleMap === "function" && currentScale && currentScale !== "default" && currentScale !== "accessible") {
-		const scale = Array.from(getScaleMap(currentScale).keys()).sort((a, b) => a - b);
-		for (let i = 0; i < scale.length; i++) {
-			if (speed <= scale[i]) return scale[i];
-		}
-		return scale[scale.length - 1];
-	}
-	const thresholds = Array.from(SPEED_CATEGORY_MAP.keys());
+    if (typeof getScaleCategoryForSpeed === "function") {
+        return getScaleCategoryForSpeed(currentScale, speed);
+    }
+    const thresholds = typeof getScaleThresholds === "function"
+        ? getScaleThresholds(currentScale)
+        : Array.from(SPEED_CATEGORY_MAP.keys());
 	let left = 0, right = thresholds.length - 1;
     
     while (left <= right) {
@@ -37,7 +34,9 @@ function speedToCat(speed) {
             right = mid - 1;
         }
     }
-    return SPEED_CATEGORY_MAP.get(thresholds[left]) || 5;
+    return typeof getScaleCategory === "function"
+        ? getScaleCategory(currentScale, thresholds[left])
+        : SPEED_CATEGORY_MAP.get(thresholds[left]) || 5;
 }
 
 function stageToShape(stage) {

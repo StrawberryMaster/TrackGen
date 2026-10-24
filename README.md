@@ -22,3 +22,7 @@ The simplest tropical cyclone track map generator. This is an enhanced fork of [
 | Longitude  | Longitude coordinate, choose either °E or °W instead of using negative numbers | 1°W | <ul><li> [x] Yes </li></ul> |
 | Wind Speed | Wind speed at that point, leave blank for unknown speeds | 25 kt | <ul><li> [ ] No </li></ul> |
 | Stage      | Stage of tropical cyclone (determines shape used for point) | Tropical Cyclone | <ul><li> [x] Yes </li></ul> |
+
+### Custom color scales
+
+Custom scales start from either the Default or Accessible scale. Add only the speed thresholds where a new color should begin; categories that are not overridden keep the base scale's colors. For example, adding entries at 190 kt and 215 kt creates three C5 ranges: the original C5 color below 190 kt, the first custom color from 190 kt, and the second custom color from 215 kt. The speed unit changes how values are displayed in the editor; its values are stored and applied in knots.

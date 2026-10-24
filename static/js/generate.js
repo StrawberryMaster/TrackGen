@@ -20,6 +20,14 @@ function getScaleList() {
     return ["default", "accessible", ...Object.keys(customScales)];
 }
 
+function getScaleDefinition(scaleName) {
+    const stored = customScales[scaleName];
+    if (Array.isArray(stored)) {
+        return { base: "default", entries: stored, legacy: true };
+    }
+    return stored || { base: "default", entries: [], legacy: false };
+}
+
 // returns an object of three independent maps
 function getScaleMaps(scaleName) {
     const cloneMap = (src) => new Map(Array.from(src.entries()));
@@ -64,10 +72,9 @@ function getScaleMaps(scaleName) {
         if (s.startsWith("extra")) return "extratropical";
         return "tropical";
     };
-    const scale = customScales[scaleName];
-    if (!scale) return getScaleMaps("default");
-    const maps = { tropical: new Map(), subtropical: new Map(), extratropical: new Map() };
-    scale.forEach(entry => {
+    const definition = getScaleDefinition(scaleName);
+    const maps = getScaleMaps(definition.base === "accessible" ? "accessible" : "default");
+    definition.entries.forEach(entry => {
         const t = normalizeType(entry.type);
         maps[t].set(Number(entry.cat), entry.color);
     });
@@ -82,6 +89,49 @@ function getScaleMap(scaleName, type) {
         : String(type).toLowerCase().startsWith("extra") ? "extratropical"
             : "tropical";
     return maps[key] || maps.tropical;
+}
+
+function getScaleThresholds(scaleName) {
+    const thresholds = new Set(Array.from(SPEED_CATEGORY_MAP.keys()));
+    if (scaleName && scaleName !== "default" && scaleName !== "accessible") {
+        getScaleDefinition(scaleName).entries.forEach(entry => {
+            const threshold = Number(entry.cat);
+            if (Number.isFinite(threshold) && threshold >= 0) thresholds.add(threshold);
+        });
+    }
+    return Array.from(thresholds).sort((a, b) => a - b);
+}
+
+function getScaleCategory(scaleName, threshold) {
+    if (scaleName && scaleName !== "default" && scaleName !== "accessible") {
+        const definition = getScaleDefinition(scaleName);
+        if (definition.legacy) {
+            const customEntry = definition.entries.find(entry =>
+                Number(entry.cat) === threshold
+            );
+            if (customEntry) return threshold;
+        }
+    }
+    return SPEED_CATEGORY_MAP.get(threshold) || 5;
+}
+
+function getScaleCategoryForSpeed(scaleName, speed) {
+    if (scaleName && scaleName !== "default" && scaleName !== "accessible") {
+        const definition = getScaleDefinition(scaleName);
+        if (!definition.legacy) {
+            const overrides = definition.entries
+                .map(entry => Number(entry.cat))
+                .filter(threshold => Number.isFinite(threshold) && threshold >= 0 && threshold <= speed)
+                .sort((a, b) => b - a);
+            if (overrides.length > 0) return overrides[0];
+        }
+    }
+
+    const thresholds = Array.from(SPEED_CATEGORY_MAP.keys());
+    for (const threshold of thresholds) {
+        if (speed <= threshold) return getScaleCategory(scaleName, threshold);
+    }
+    return 5;
 }
 
 function saveCustomScale(name, entries) {
@@ -113,9 +163,9 @@ function showScaleEditor(scaleName) {
     const entriesDiv = document.getElementById("scale-entries");
     const unit = document.getElementById("scale-speed-unit").value;
 
-    const scale = customScales[scaleName] || [
-        { cat: -999, color: "#C0C0C0", type: "tropical" }
-    ];
+    const definition = getScaleDefinition(scaleName);
+    const scale = definition.entries;
+    document.getElementById("scale-base").value = definition.base;
 
     const fragment = document.createDocumentFragment();
 
@@ -155,6 +205,12 @@ document.addEventListener("DOMContentLoaded", () => {
         currentScale = e.target.value;
         updateScaleSelector();
         showScaleEditor(currentScale !== "default" && currentScale !== "accessible" ? currentScale : "");
+    });
+
+    document.getElementById("scale-base").addEventListener("change", () => {
+        if (currentScale !== "default" && currentScale !== "accessible") {
+            showScaleEditor(currentScale);
+        }
     });
 
     document.getElementById("scale-speed-unit").addEventListener("change", () => {
@@ -249,7 +305,10 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("Add at least one entry.");
             return;
         }
-        saveCustomScale(name, entries);
+        saveCustomScale(name, {
+            base: document.getElementById("scale-base").value,
+            entries
+        });
         currentScale = name;
         updateScaleSelector();
         showScaleEditor(name);

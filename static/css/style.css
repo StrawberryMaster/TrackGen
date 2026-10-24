@@ -161,6 +161,20 @@ textarea {
 	font-family: 'Roboto Mono', monospace;
 }
 
+#scale-editor {
+	white-space: normal;
+}
+
+#scale-base-selector {
+	margin: 1em 0;
+}
+
+.scale-help {
+	margin-top: .5em;
+	font-size: .9em;
+	white-space: normal;
+}
+
 #inputs .name {
 	width: 98%;
 }
