@@ -3,7 +3,7 @@
  *
  * Weird stuff here. The idea is to:
  *   1. Align the uploaded image to the default equirectangular world map by
- *      multi-scale template matching (coarse pass + fine pass)
+ *      multi-scale template matching (coarse pass + fine pass, wrapping across ±180°)
  *   2. Detect coloured dots/triangles/squares using the active colour scale
  *   3. Convert pixel positions to lat/lon and representative wind speeds, then
  *      hand the result to the existing importPoints() helper so the points
@@ -21,7 +21,7 @@
   const FINE_W = 2048, FINE_H = 1024;
   const COLOUR_DISTANCE = 32;        // RGB distance tolerated when matching palette colours
   const DOT_RADIUS_FRACTION = 0.29890625 / 360; // dot radius as a fraction of the full map width
-  const WORK_MAX_WIDTH = 1400;       // cap working resolution of uploaded images
+  const WORK_MAX_WIDTH = 2048;       // preserve native pixel detail up to 2048px wide
 
   let refCoarse = null;             // { w, h, gray }
   let refFine = null;
@@ -221,13 +221,19 @@
   }
 
   // normalized cross correlation between a query crop and a reference position
-  function nccAt(q, qStats, probes, ref, ox, oy) {
+  // wrapX=true wraps horizontally across ±180° for full-globe equirectangular references
+  function nccAt(q, qStats, probes, ref, ox, oy, wrapX) {
     const rw = ref.w;
     let sr = 0, sr2 = 0, sqr = 0;
     for (let k = 0; k < probes.n; k++) {
-      const rx = ox + probes.px[k];
       const ry = oy + probes.py[k];
-      if (rx < 0 || ry < 0 || rx >= rw || ry >= ref.h) return -2;
+      if (ry < 0 || ry >= ref.h) return -2;
+      let rx = ox + probes.px[k];
+      if (wrapX) {
+        rx = ((rx % rw) + rw) % rw;
+      } else if (rx < 0 || rx >= rw) {
+        return -2;
+      }
       const rv = ref.gray[ry * rw + rx];
       const qv = q[probes.py[k] * q.width + probes.px[k]];
       sr += rv;
@@ -248,18 +254,18 @@
     return g;
   }
 
-  // georeferencing
+  // georeferencing (supports crops crossing ±180° antimeridian)
   function findCrop(workCanvas) {
     const aspect = workCanvas.width / workCanvas.height;
     const ref = refCoarse;
     const maxW = Math.min(ref.w, ref.h * aspect);
     const scales = [];
-    for (let w = 16; w <= maxW * 1.02; w *= 1.18) scales.push(Math.max(8, Math.round(w)));
+    for (let w = 16; w <= maxW * 1.02; w *= 1.12) scales.push(Math.max(8, Math.round(w)));
     if (scales[scales.length - 1] !== Math.round(maxW)) scales.push(Math.round(maxW));
 
     let best = { score: -Infinity, x: 0, y: 0, w: scales[0], h: Math.round(scales[0] / aspect) };
 
-    // coarse pass over every candidate zoom / position
+    // coarse pass over every candidate zoom / position (wrapping horizontally across ±180°)
     for (const candidate of scales) {
       const w = Math.min(candidate, ref.w);
       const h = Math.max(8, Math.min(ref.h, Math.round(w / aspect)));
@@ -269,8 +275,8 @@
       const stats = probeStats(q, probes);
 
       for (let oy = 0; oy + h <= ref.h; oy += 4) {
-        for (let ox = 0; ox + w <= ref.w; ox += 4) {
-          const score = nccAt(q, stats, probes, ref, ox, oy);
+        for (let ox = 0; ox < ref.w; ox += 4) {
+          const score = nccAt(q, stats, probes, ref, ox, oy, true);
           if (score > best.score) {
             best = { score, x: ox, y: oy, w, h };
           }
@@ -287,7 +293,7 @@
     const fineBest = { score: -Infinity, x: baseX, y: baseY, w: baseW, h: best.h * scaleFactor };
 
     const radius = Math.max(60, Math.round(baseW * 0.14));
-    const factors = [0.9, 0.95, 1, 1.04, 1.08, 1.12];
+    const factors = [0.88, 0.92, 0.96, 1, 1.04, 1.08, 1.12];
     for (const factor of factors) {
       const w = Math.max(16, Math.min(fine.w, Math.round(baseW * factor)));
       const h = Math.max(16, Math.min(fine.h, Math.round(w / aspect)));
@@ -298,8 +304,8 @@
       const stats = probeStats(q, probes);
 
       for (let oy = Math.max(0, Math.round(baseY - radius)); oy <= Math.min(fine.h - h, Math.round(baseY + radius)); oy += 8) {
-        for (let ox = Math.max(0, Math.round(baseX - radius)); ox <= Math.min(fine.w - w, Math.round(baseX + radius)); ox += 8) {
-          const score = nccAt(q, stats, probes, fine, ox, oy);
+        for (let ox = Math.round(baseX - radius); ox <= Math.round(baseX + radius); ox += 8) {
+          const score = nccAt(q, stats, probes, fine, ox, oy, true);
           if (score > fineBest.score) {
             fineBest.score = score;
             fineBest.x = ox;
@@ -324,8 +330,8 @@
       const probes = makeProbes(w, h, 40, 28);
       const stats = probeStats(q, probes);
       for (let oy = Math.max(0, refineBaseY - 12); oy <= Math.min(fine.h - h, refineBaseY + 12); oy++) {
-        for (let ox = Math.max(0, refineBaseX - 12); ox <= Math.min(fine.w - w, refineBaseX + 12); ox++) {
-          const score = nccAt(q, stats, probes, fine, ox, oy);
+        for (let ox = refineBaseX - 12; ox <= refineBaseX + 12; ox++) {
+          const score = nccAt(q, stats, probes, fine, ox, oy, true);
           if (score > fineBest.score) {
             fineBest.score = score;
             fineBest.x = ox;
@@ -337,40 +343,55 @@
       }
     }
 
+    fineBest.x = ((fineBest.x % fine.w) + fine.w) % fine.w;
     return { ...fineBest, confidence: fineBest.score };
   }
 
   function sampleCropBackground(crop, width, height) {
     if (!refImage || crop.confidence < 0.5 || crop.w <= 0 || crop.h <= 0) return null;
     try {
+      const natW = refImage.naturalWidth;
+      const natH = refImage.naturalHeight;
       const bgCanvas = document.createElement("canvas");
       bgCanvas.width = width;
       bgCanvas.height = height;
       const bgCtx = bgCanvas.getContext("2d", { willReadFrequently: true });
-      const sx = (crop.x / refFine.w) * refImage.naturalWidth;
-      const sy = (crop.y / refFine.h) * refImage.naturalHeight;
-      const sw = (crop.w / refFine.w) * refImage.naturalWidth;
-      const sh = (crop.h / refFine.h) * refImage.naturalHeight;
-      bgCtx.drawImage(refImage, sx, sy, sw, sh, 0, 0, width, height);
+      let sx = ((crop.x / refFine.w) * natW) % natW;
+      if (sx < 0) sx += natW;
+      const sy = (crop.y / refFine.h) * natH;
+      const sw = (crop.w / refFine.w) * natW;
+      const sh = (crop.h / refFine.h) * natH;
+
+      if (sx + sw <= natW) {
+        bgCtx.drawImage(refImage, sx, sy, sw, sh, 0, 0, width, height);
+      } else {
+        const sw1 = natW - sx;
+        const sw2 = Math.min(natW, sw - sw1);
+        const dw1 = width * (sw1 / sw);
+        bgCtx.drawImage(refImage, sx, sy, sw1, sh, 0, 0, dw1, height);
+        bgCtx.drawImage(refImage, 0, sy, sw2, sh, dw1, 0, width - dw1, height);
+      }
       return bgCtx.getImageData(0, 0, width, height).data;
     } catch (err) {
       return null;
     }
   }
 
-  // refine alignment
+  // refine alignment at up to full 8k resolution (wrapping across ±180°)
   function refineCrop8k(workCanvas, crop, points) {
     if (!refImage || !refImage.naturalWidth || crop.confidence < 0.25) return crop;
 
-    const scaleX8k = refImage.naturalWidth / refFine.w;
-    const scaleY8k = refImage.naturalHeight / refFine.h;
+    const natW = refImage.naturalWidth;
+    const natH = refImage.naturalHeight;
+    const scaleX8k = natW / refFine.w;
+    const scaleY8k = natH / refFine.h;
     const pad = 28;
-    const rx0 = Math.max(0, Math.floor(crop.x * scaleX8k) - pad);
+    const rx0 = Math.floor(crop.x * scaleX8k) - pad;
+    const rx1 = Math.ceil((crop.x + crop.w) * scaleX8k) + pad;
     const ry0 = Math.max(0, Math.floor(crop.y * scaleY8k) - pad);
-    const rx1 = Math.min(refImage.naturalWidth, Math.ceil((crop.x + crop.w) * scaleX8k) + pad);
-    const ry1 = Math.min(refImage.naturalHeight, Math.ceil((crop.y + crop.h) * scaleY8k) + pad);
+    const ry1 = Math.min(natH, Math.ceil((crop.y + crop.h) * scaleY8k) + pad);
     const srcW = rx1 - rx0, srcH = ry1 - ry0;
-    if (srcW < 32 || srcH < 32) return crop;
+    if (srcW < 32 || srcH < 32 || srcW > natW) return crop;
 
     // keep full 8k resolution on regional crops; cap only on near-global views
     const patchScale = Math.min(1, 2400 / Math.max(srcW, srcH));
@@ -381,12 +402,30 @@
     rc.width = rw;
     rc.height = rh;
     const rctx = rc.getContext("2d", { willReadFrequently: true });
-    rctx.drawImage(refImage, rx0, ry0, srcW, srcH, 0, 0, rw, rh);
+
+    let curSrcX = rx0;
+    let curDstX = 0;
+    let remW = srcW;
+    while (remW > 0) {
+      const modX = ((curSrcX % natW) + natW) % natW;
+      const take = Math.min(remW, natW - modX);
+      const dstTake = (take / srcW) * rw;
+      rctx.drawImage(refImage, modX, ry0, take, srcH, curDstX, 0, dstTake, rh);
+      curSrcX += take;
+      curDstX += dstTake;
+      remW -= take;
+    }
+
     const rGray = grayFromImageData(rctx.getImageData(0, 0, rw, rh).data, rw, rh);
     blurGray(rGray, rw, rh);
     const refPatch = { w: rw, h: rh, gray: rGray };
 
-    const aspect = workCanvas.width / workCanvas.height;
+    // Identify bright white pixels (track lines, grid lines) in workCanvas so probes avoid them
+    const wCtx = workCanvas.getContext("2d", { willReadFrequently: true });
+    const wData = wCtx.getImageData(0, 0, workCanvas.width, workCanvas.height).data;
+    const ww = workCanvas.width, wh = workCanvas.height;
+
+    const aspect = ww / wh;
     const baseW = crop.w * scaleX8k * patchScale;
     const baseOx = (crop.x * scaleX8k - rx0) * patchScale;
     const baseOy = (crop.y * scaleY8k - ry0) * patchScale;
@@ -394,8 +433,12 @@
     const filterProbes = (w, h, raw) => {
       const px = [], py = [];
       for (let k = 0; k < raw.n; k++) {
-        const wx = (raw.px[k] / w) * workCanvas.width;
-        const wy = (raw.py[k] / h) * workCanvas.height;
+        const wx = Math.min(ww - 1, Math.max(0, Math.round((raw.px[k] / w) * ww)));
+        const wy = Math.min(wh - 1, Math.max(0, Math.round((raw.py[k] / h) * wh)));
+        const wp = (wy * ww + wx) * 4;
+        const mn = Math.min(wData[wp], wData[wp + 1], wData[wp + 2]);
+        const mx = Math.max(wData[wp], wData[wp + 1], wData[wp + 2]);
+        if (mn >= 195 && mx - mn <= 35) continue; // skip bright white lines / gridlines
         let onDot = false;
         for (let i = 0; i < points.length; i++) {
           const p = points[i];
@@ -410,10 +453,10 @@
       return { px: new Int32Array(px), py: new Int32Array(py), n: px.length };
     };
 
-    let best = { score: -Infinity, ox: baseOx, oy: baseOy, w: Math.round(baseW), h: Math.round(baseW / aspect), q: null, stats: null, probes: null };
-    const searchRad = Math.max(10, Math.round(20 * patchScale));
+    let best = { score: -Infinity, ox: baseOx, oy: baseOy, w: Math.round(baseW), h: Math.round(baseW / aspect), factor: 1, q: null, stats: null, probes: null };
+    const searchRad = Math.max(10, Math.round(24 * patchScale));
 
-    for (const factor of [0.984, 0.992, 1, 1.008, 1.016]) {
+    for (const factor of [0.985, 0.99, 0.995, 1, 1.005, 1.01, 1.015]) {
       const w = Math.max(16, Math.min(rw, Math.round(baseW * factor)));
       const h = Math.max(16, Math.min(rh, Math.round(w / aspect)));
       if (h > rh) continue;
@@ -423,40 +466,62 @@
 
       for (let oy = Math.max(0, Math.round(baseOy - searchRad)); oy <= Math.min(rh - h, Math.round(baseOy + searchRad)); oy += 2) {
         for (let ox = Math.max(0, Math.round(baseOx - searchRad)); ox <= Math.min(rw - w, Math.round(baseOx + searchRad)); ox += 2) {
-          const score = nccAt(q, stats, probes, refPatch, ox, oy);
-          if (score > best.score) best = { score, ox, oy, w, h, q, stats, probes };
+          const score = nccAt(q, stats, probes, refPatch, ox, oy, false);
+          if (score > best.score) best = { score, ox, oy, w, h, factor, q, stats, probes };
         }
       }
     }
 
     if (!best.q) return crop;
 
+    // Micro-scale polish around winning factor
+    const winFactor = best.factor;
+    const winOx = best.ox, winOy = best.oy;
+    for (const df of [-0.0025, 0.0025]) {
+      const f = winFactor + df;
+      const w = Math.max(16, Math.min(rw, Math.round(baseW * f)));
+      const h = Math.max(16, Math.min(rh, Math.round(w / aspect)));
+      if (h > rh) continue;
+      const q = wrapGray(resizedGray(workCanvas, w, h), w, h);
+      const probes = filterProbes(w, h, makeProbes(w, h, 36, 26));
+      const stats = probeStats(q, probes);
+      for (let oy = Math.max(0, winOy - 3); oy <= Math.min(rh - h, winOy + 3); oy++) {
+        for (let ox = Math.max(0, winOx - 3); ox <= Math.min(rw - w, winOx + 3); ox++) {
+          const score = nccAt(q, stats, probes, refPatch, ox, oy, false);
+          if (score > best.score) best = { score, ox, oy, w, h, factor: f, q, stats, probes };
+        }
+      }
+    }
+
     // 1-px pass + parabolic sub-pixel peak around the winning position
     const cx0 = best.ox, cy0 = best.oy;
     for (let oy = Math.max(0, cy0 - 3); oy <= Math.min(rh - best.h, cy0 + 3); oy++) {
       for (let ox = Math.max(0, cx0 - 3); ox <= Math.min(rw - best.w, cx0 + 3); ox++) {
-        const score = nccAt(best.q, best.stats, best.probes, refPatch, ox, oy);
+        const score = nccAt(best.q, best.stats, best.probes, refPatch, ox, oy, false);
         if (score > best.score) { best.score = score; best.ox = ox; best.oy = oy; }
       }
     }
 
     let dx = 0, dy = 0;
     if (best.ox > 0 && best.ox + best.w < rw) {
-      const sL = nccAt(best.q, best.stats, best.probes, refPatch, best.ox - 1, best.oy);
-      const sR = nccAt(best.q, best.stats, best.probes, refPatch, best.ox + 1, best.oy);
+      const sL = nccAt(best.q, best.stats, best.probes, refPatch, best.ox - 1, best.oy, false);
+      const sR = nccAt(best.q, best.stats, best.probes, refPatch, best.ox + 1, best.oy, false);
       const denom = sL + sR - 2 * best.score;
       if (denom < -1e-7) dx = Math.max(-0.5, Math.min(0.5, 0.5 * (sL - sR) / denom));
     }
     if (best.oy > 0 && best.oy + best.h < rh) {
-      const sU = nccAt(best.q, best.stats, best.probes, refPatch, best.ox, best.oy - 1);
-      const sD = nccAt(best.q, best.stats, best.probes, refPatch, best.ox, best.oy + 1);
+      const sU = nccAt(best.q, best.stats, best.probes, refPatch, best.ox, best.oy - 1, false);
+      const sD = nccAt(best.q, best.stats, best.probes, refPatch, best.ox, best.oy + 1, false);
       const denom = sU + sD - 2 * best.score;
       if (denom < -1e-7) dy = Math.max(-0.5, Math.min(0.5, 0.5 * (sU - sD) / denom));
     }
 
+    let finalX = (rx0 + (best.ox + dx) / patchScale) / scaleX8k;
+    finalX = ((finalX % refFine.w) + refFine.w) % refFine.w;
+
     return {
       ...crop,
-      x: (rx0 + (best.ox + dx) / patchScale) / scaleX8k,
+      x: finalX,
       y: (ry0 + (best.oy + dy) / patchScale) / scaleY8k,
       w: (best.w / patchScale) / scaleX8k,
       h: (best.h / patchScale) / scaleY8k,
@@ -557,7 +622,7 @@
   // share a linear bounding dimension rather than raw pixel area
   function filterConsistentSizes(points, expectedDiam) {
     if (points.length < 3) return points;
-    const sizeWindows = [[0.48, 1.35], [0.3, 1.85], [0.18, 2.5]];
+    const sizeWindows = [[0.42, 1.4], [0.28, 1.85], [0.18, 2.5]];
     let bestCluster = [];
 
     for (const [loF, hiF] of sizeWindows) {
@@ -571,7 +636,7 @@
       let bestScore = -1;
       for (let i = 0; i < dims.length; i++) {
         const loD = dims[i];
-        const hiD = Math.ceil(Math.max(loD + 4, loD * 1.7));
+        const hiD = Math.ceil(Math.max(loD + 5, loD * 1.95));
         const cl = inWin.filter((p) => p.dim >= loD && p.dim <= hiD);
         if (!cl.length) continue;
         const avgDist = cl.reduce((s, p) => s + p.distance, 0) / cl.length;
@@ -630,6 +695,7 @@
       ring2.push([Math.round(ringR2 * Math.cos(ang)), Math.round(ringR2 * Math.sin(ang))]);
     }
 
+    // median ring contrast tolerates 2-3 neighboring dots in tight loops/chains
     const ringContrast = (cx, cy, mr, mg, mb, offsets) => {
       const rdists = [];
       for (let k = 0; k < offsets.length; k++) {
@@ -642,7 +708,7 @@
       }
       if (rdists.length < 4) return 0;
       rdists.sort((a, b) => a - b);
-      return rdists[Math.max(0, Math.floor(rdists.length / 3) - 1)];
+      return rdists[rdists.length >> 1];
     };
 
     // white connector mask (used as a soft ranking signal)
@@ -707,7 +773,7 @@
     const sameSep2 = Math.pow(Math.max(4, r * 0.9), 2);
     const diffSep2 = Math.pow(Math.max(3, r * 0.45), 2);
     for (const c of candidates) {
-      if (picked.length >= 500) break;
+      if (picked.length >= 2000) break;
       let tooClose = false;
       for (const p of picked) {
         const dx = p.x - c.x, dy = p.y - c.y;
@@ -721,18 +787,22 @@
       if (!tooClose) picked.push(c);
     }
 
-    // flood-fill each seed using its own colour and classify shape
+    // flood-fill each seed using its own colour, falling back to Voronoi-bounded
+    // segmentation when touching dots of the same colour merge together
     const rawPoints = [];
     const half = Math.max(6, Math.round(r * 2.6));
     const colourTolerance2 = 38 * 38;
+    const maxRad = Math.max(3.5, r * 1.25);
+    const maxRad2 = maxRad * maxRad;
+    const neighborSearch2 = Math.pow(r * 3.2, 2);
     const bgRad = Math.max(6, Math.round(r));
     const bgStep = Math.max(1, Math.round(bgRad / 4));
 
-    for (const c of picked) {
+    const runFlood = (c, bounded, sameNeighbors) => {
       const x0 = Math.max(0, c.x - half), x1 = Math.min(w - 1, c.x + half);
       const y0 = Math.max(0, c.y - half), y1 = Math.min(h - 1, c.y + half);
       const rw = x1 - x0 + 1, rh = y1 - y0 + 1;
-      if (rw < 3 || rh < 3) continue;
+      if (rw < 3 || rh < 3) return null;
 
       const visited = new Uint8Array(rw * rh);
       const stack = new Int32Array(rw * rh);
@@ -741,7 +811,7 @@
       visited[start] = 1;
       stack[sp++] = start;
 
-      const pixLX = [], pixLY = [];
+      const pixLX = [], pixLY = [], pixR = [], pixG = [], pixB = [];
       let count = 0, sx = 0, sy = 0, sr = 0, sg = 0, sb = 0;
       let minX = rw, maxX = 0, minY = rh, maxY = 0;
       let hitsBorder = 0;
@@ -750,6 +820,23 @@
         const idx = stack[--sp];
         const lx = idx % rw, ly = (idx / rw) | 0;
         const gx = x0 + lx, gy = y0 + ly;
+
+        if (bounded) {
+          const dxSelf = gx - c.x, dySelf = gy - c.y;
+          const dSelf2 = dxSelf * dxSelf + dySelf * dySelf;
+          if (dSelf2 > maxRad2) continue;
+          let closerOther = false;
+          for (let q = 0; q < sameNeighbors.length; q++) {
+            const nq = sameNeighbors[q];
+            const dxO = gx - nq.x, dyO = gy - nq.y;
+            if (dxO * dxO + dyO * dyO < dSelf2) {
+              closerOther = true;
+              break;
+            }
+          }
+          if (closerOther) continue;
+        }
+
         const p = (gy * w + gx) * 4;
         const pr = d[p], pg = d[p + 1], pb = d[p + 2];
         const dr = pr - c.r, dg = pg - c.g, db = pb - c.b;
@@ -761,6 +848,9 @@
 
         pixLX.push(lx);
         pixLY.push(ly);
+        pixR.push(pr);
+        pixG.push(pg);
+        pixB.push(pb);
         count++;
         sx += gx; sy += gy;
         sr += pr; sg += pg; sb += pb;
@@ -785,19 +875,59 @@
         }
       }
 
-      if (count < 9) continue;
-      if (hitsBorder > Math.max(3, count * 0.08)) continue;
-
+      if (count === 0) return null;
       const boxW = maxX - minX + 1, boxH = maxY - minY + 1;
-      const maxDim = Math.max(boxW, boxH);
-      const fill = count / (boxW * boxH);
-      const aspect = boxW / boxH;
-      if (fill < 0.44 || fill > 1.02) continue;
-      if (aspect < 0.65 || aspect > 1.6) continue;
+      return {
+        x0, y0, rw, rh, pixLX, pixLY, pixR, pixG, pixB,
+        count, sx, sy, sr, sg, sb,
+        minX, maxX, minY, maxY, boxW, boxH,
+        maxDim: Math.max(boxW, boxH),
+        fill: count / (boxW * boxH),
+        aspect: boxW / boxH,
+        hitsBorder
+      };
+    };
+
+    for (let idxC = 0; idxC < picked.length; idxC++) {
+      const c = picked[idxC];
+      let res = runFlood(c, false, null);
+      if (!res || res.count < 7) continue;
+
+      let usedBounded = false;
+      const isCompact =
+        res.hitsBorder <= Math.max(3, res.count * 0.08) &&
+        res.maxDim <= Math.max(6, r * 2.7) &&
+        res.fill >= 0.44 && res.fill <= 1.02 &&
+        res.aspect >= 0.65 && res.aspect <= 1.6;
+
+      if (!isCompact) {
+        if (c.stdIn > 8.5) continue; // skip noisy edge/bridge seeds between overlapping dots
+        const sameNeighbors = [];
+        for (let j = 0; j < picked.length; j++) {
+          if (j === idxC) continue;
+          const q = picked[j];
+          const dx = q.x - c.x, dy = q.y - c.y;
+          if (dx * dx + dy * dy > neighborSearch2) continue;
+          const cd2 = (q.r - c.r) * (q.r - c.r) + (q.g - c.g) * (q.g - c.g) + (q.b - c.b) * (q.b - c.b);
+          if (cd2 < 55 * 55 && (q.stdIn <= 8.5 || q.score <= c.score + 10)) {
+            sameNeighbors.push(q);
+          }
+        }
+        res = runFlood(c, true, sameNeighbors);
+        if (!res || res.count < 7) continue;
+        if (res.fill < 0.44 || res.aspect < 0.55 || res.aspect > 1.85) continue;
+        usedBounded = true;
+      }
+
+      const {
+        x0, y0, rw, pixLX, pixLY, pixR, pixG, pixB,
+        count, sx, sy, sr, sg, sb,
+        minX, maxX, minY, maxY, maxDim, fill
+      } = res;
 
       const mr = sr / count, mg = sg / count, mb = sb / count;
 
-      // verify immediate exterior contrast just outside the bounding box
+      // verify immediate exterior contrast just outside the bounding box (median tolerates chain neighbors)
       const bx0 = Math.max(0, x0 + minX - 2), bx1 = Math.min(w - 1, x0 + maxX + 2);
       const by0 = Math.max(0, y0 + minY - 2), by1 = Math.min(h - 1, y0 + maxY + 2);
       const bxMid = (bx0 + bx1) >> 1, byMid = (by0 + by1) >> 1;
@@ -811,7 +941,7 @@
         const dr = d[p] - mr, dg = d[p + 1] - mg, db = d[p + 2] - mb;
         return Math.sqrt(dr * dr + dg * dg + db * db);
       }).sort((a, b) => a - b);
-      const borderContrast = bDists[Math.max(0, Math.floor(bDists.length / 3) - 1)];
+      const borderContrast = bDists[bDists.length >> 1];
       if (borderContrast < 42) continue;
 
       const cx = sx / count, cy = sy / count;
@@ -833,11 +963,33 @@
         if (minBgDist < 24 && (c.stdIn > 2 || borderContrast < 150)) continue;
       }
 
-      // compare top-third vs bottom-third horizontal width to separate triangles from circles
-      const topCut = minY + boxH / 3;
-      const botCut = maxY - boxH / 3;
-      let topMin = rw, topMax = -1, botMin = rw, botMax = -1;
+      // use crisp core pixels (<= 26 RGB dist from marker mean) to classify triangle vs circle vs square
+      const coreTol2 = 26 * 26;
+      const coreIdx = [];
       for (let i = 0; i < count; i++) {
+        const dr = pixR[i] - mr, dg = pixG[i] - mg, db = pixB[i] - mb;
+        if (dr * dr + dg * dg + db * db <= coreTol2) coreIdx.push(i);
+      }
+      const useCore = coreIdx.length >= 6;
+      const sCount = useCore ? coreIdx.length : count;
+      let sMinX = rw, sMaxX = 0, sMinY = rw + h, sMaxY = 0;
+      for (let k = 0; k < sCount; k++) {
+        const i = useCore ? coreIdx[k] : k;
+        const lx = pixLX[i], ly = pixLY[i];
+        if (lx < sMinX) sMinX = lx;
+        if (lx > sMaxX) sMaxX = lx;
+        if (ly < sMinY) sMinY = ly;
+        if (ly > sMaxY) sMaxY = ly;
+      }
+      const sBoxW = sMaxX - sMinX + 1, sBoxH = sMaxY - sMinY + 1;
+      const sFill = sCount / (sBoxW * sBoxH);
+      const sMaxDim = Math.max(sBoxW, sBoxH);
+
+      const topCut = sMinY + sBoxH / 3;
+      const botCut = sMaxY - sBoxH / 3;
+      let topMin = rw, topMax = -1, botMin = rw, botMax = -1;
+      for (let k = 0; k < sCount; k++) {
+        const i = useCore ? coreIdx[k] : k;
         const lx = pixLX[i], ly = pixLY[i];
         if (ly <= topCut) {
           if (lx < topMin) topMin = lx;
@@ -850,12 +1002,18 @@
       }
       const topW = topMax >= topMin ? topMax - topMin + 1 : 0;
       const botW = botMax >= botMin ? botMax - botMin + 1 : 0;
-      const isTriangle = (fill < 0.64 && botW > topW * 1.25) || (fill < 0.72 && botW > topW * 1.65);
+      const isTriangle = !usedBounded && (
+        (sFill < 0.66 && botW > topW * 1.25) ||
+        (sFill < 0.78 && botW > topW * 1.55)
+      );
+      const isSquare = !usedBounded && !isTriangle && (
+        sFill >= 0.93 || (sMaxDim >= 8 && sFill >= 0.91)
+      );
 
       let stage;
       if (isTriangle) stage = "Extratropical cyclone";
-      else if (fill < 0.88) stage = "Tropical cyclone";
-      else stage = "Subtropical cyclone";
+      else if (isSquare) stage = "Subtropical cyclone";
+      else stage = "Tropical cyclone";
 
       const colour = nearestEntry(mr, mg, mb, entries);
       if (!colour.entry) continue;
@@ -887,6 +1045,7 @@
         dim: maxDim,
         fill: fill,
         isTriangle: isTriangle,
+        usedBounded: usedBounded,
         occluded: false,
         contrast: borderContrast,
         minBgDist: minBgDist,
@@ -928,7 +1087,9 @@
     }
 
     // reject unoccluded irregular low-fill blobs that are neither triangles nor circles/squares
-    const validShape = points.filter((p) => !(p.fill < 0.62 && !p.isTriangle && !p.occluded));
+    const validShape = points.filter((p) =>
+      !(p.fill < 0.62 && !p.isTriangle && !p.occluded && !p.usedBounded && (p.distance >= 22 || p.fill < 0.48))
+    );
     let cluster = filterConsistentSizes(validShape, 2 * r);
 
     // dominant-scale verification and outlier filtering
@@ -985,84 +1146,238 @@
     return cluster;
   }
 
-  // reconstruct track sequence via Euclidean Minimum Spanning Tree diameter
-  // this way curved/J-shaped tracks order cleanly from one endpoint to the other
-  function orderPoints(points) {
+  // reconstruct track sequence using connector-line evidence, skip checks,
+  // colour continuity, and degree-<=2 greedy path merging (handles self-crossings & loops)
+  function orderPoints(points, imageData) {
     const n = points.length;
     if (n < 3) return points.slice();
 
+    const w = imageData ? imageData.width : 0;
+    const h = imageData ? imageData.height : 0;
+    const d = imageData ? imageData.data : null;
+
+    const segLineScore = (a, b) => {
+      const pa = points[a], pb = points[b];
+      const dx = pb.x - pa.x, dy = pb.y - pa.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 1) return { lf: 1, gap: 0 };
+      const ra = Math.max(3.5, pa.dim * 0.65);
+      const rb = Math.max(3.5, pb.dim * 0.65);
+      const gap = dist - ra - rb;
+      if (gap <= 2.0 || !d) return { lf: 1, gap };
+
+      const ux = dx / dist, uy = dy / dist;
+      const px = -uy, py = ux;
+      const nSteps = Math.max(3, Math.floor(gap));
+      let hits = 0;
+      const offs = [-1.5, -0.75, 0, 0.75, 1.5];
+      for (let k = 0; k <= nSteps; k++) {
+        const t = ra + (k / nSteps) * gap;
+        const sx = pa.x + ux * t;
+        const sy = pa.y + uy * t;
+        let hit = false;
+        for (let oi = 0; oi < offs.length; oi++) {
+          const ix = Math.round(sx + px * offs[oi]);
+          const iy = Math.round(sy + py * offs[oi]);
+          if (ix >= 0 && ix < w && iy >= 0 && iy < h) {
+            const idx = (iy * w + ix) * 4;
+            const R = d[idx], G = d[idx + 1], B = d[idx + 2];
+            const mn = Math.min(R, G, B), mx = Math.max(R, G, B);
+            const lum = 0.299 * R + 0.587 * G + 0.114 * B;
+            if (lum >= 145 && mx - mn <= 40) {
+              hit = true;
+              break;
+            }
+          }
+        }
+        if (hit) hits++;
+      }
+      return { lf: hits / (nSteps + 1), gap };
+    };
+
+    // pairwise distances
+    const distMat = new Float64Array(n * n);
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
+        distMat[i * n + j] = dist;
+        distMat[j * n + i] = dist;
+      }
+    }
+
+    // build EMST first to detect whether the image renders white track connector lines
     const inTree = new Uint8Array(n);
     const minDist = new Float64Array(n).fill(Infinity);
-    const parent = new Int32Array(n).fill(-1);
+    const par = new Int32Array(n).fill(-1);
     minDist[0] = 0;
-    const adj = Array.from({ length: n }, () => []);
-
+    const emstLines = [];
     for (let iter = 0; iter < n; iter++) {
       let u = -1;
       for (let i = 0; i < n; i++) {
         if (!inTree[i] && (u === -1 || minDist[i] < minDist[u])) u = i;
       }
       inTree[u] = 1;
-      if (parent[u] !== -1) {
-        const p = parent[u];
-        const w = Math.hypot(points[u].x - points[p].x, points[u].y - points[p].y);
-        adj[u].push([p, w]);
-        adj[p].push([u, w]);
+      if (par[u] !== -1 && d) {
+        const info = segLineScore(u, par[u]);
+        if (info.gap > 3.0) emstLines.push(info.lf);
       }
       for (let v = 0; v < n; v++) {
         if (!inTree[v]) {
-          const dx = points[u].x - points[v].x;
-          const dy = points[u].y - points[v].y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < minDist[v]) {
-            minDist[v] = d2;
-            parent[v] = u;
+          const dist = distMat[u * n + v];
+          if (dist < minDist[v]) {
+            minDist[v] = dist;
+            par[v] = u;
           }
         }
       }
     }
+    emstLines.sort((a, b) => a - b);
+    const hasWhiteLines = emstLines.length >= 3 && emstLines[emstLines.length >> 1] >= 0.55;
 
-    const farthest = (start) => {
-      const dist = new Float64Array(n).fill(-1);
-      const prev = new Int32Array(n).fill(-1);
-      dist[start] = 0;
-      const stack = [start];
-      let best = start;
-      while (stack.length) {
-        const u = stack.pop();
-        if (dist[u] > dist[best]) best = u;
-        for (const [v, w] of adj[u]) {
-          if (dist[v] < 0) {
-            dist[v] = dist[u] + w;
-            prev[v] = u;
-            stack.push(v);
+    // evaluate k-nearest candidate edges
+    const kNbrs = Math.min(n - 1, 15);
+    const seenPairs = new Set();
+    const candEdges = [];
+    const indices = Array.from({ length: n }, (_, idx) => idx);
+
+    for (let i = 0; i < n; i++) {
+      const rowOff = i * n;
+      indices.sort((a, b) => distMat[rowOff + a] - distMat[rowOff + b]);
+      for (let ki = 1; ki <= kNbrs; ki++) {
+        const j = indices[ki];
+        const a = i < j ? i : j;
+        const b = i < j ? j : i;
+        const key = a * n + b;
+        if (seenPairs.has(key)) continue;
+        seenPairs.add(key);
+
+        const dist = distMat[key];
+        const { lf, gap } = segLineScore(a, b);
+
+        // check if segment skips directly through a third intermediate marker
+        let skips = false;
+        const maxEndpointDim = Math.max(points[a].dim, points[b].dim);
+        if (dist > maxEndpointDim * 1.2) {
+          const abx = points[b].x - points[a].x;
+          const aby = points[b].y - points[a].y;
+          const ab2 = abx * abx + aby * aby;
+          if (ab2 > 1e-6) {
+            for (let m = 0; m < n; m++) {
+              if (m === a || m === b) continue;
+              const t = ((points[m].x - points[a].x) * abx + (points[m].y - points[a].y) * aby) / ab2;
+              if (t > 0.15 && t < 0.85) {
+                const px = points[a].x + t * abx;
+                const py = points[a].y + t * aby;
+                const pdist = Math.hypot(points[m].x - px, points[m].y - py);
+                if (pdist < Math.max(2.5, 0.45 * points[m].dim)) {
+                  skips = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        const cdist = Math.hypot(
+          points[a].mr - points[b].mr,
+          points[a].mg - points[b].mg,
+          points[a].mb - points[b].mb
+        );
+
+        let mult = 1.0;
+        if (gap > 2.5 && d) {
+          if (lf >= 0.65) mult *= 0.35;
+          else if (lf >= 0.40) mult *= 0.75;
+          else if (hasWhiteLines) mult *= 5.0;
+        }
+        if (skips) {
+          mult *= (gap > 2.5 && lf >= 0.65) ? 2.0 : 5.5;
+        }
+        mult *= 1.0 + 0.5 * Math.min(1.0, cdist / 120.0);
+
+        candEdges.push({ cost: dist * mult, a, b });
+      }
+    }
+
+    candEdges.sort((u, v) => u.cost - v.cost);
+
+    // Union-Find + degree <= 2 greedy path building
+    const ufParent = Int32Array.from({ length: n }, (_, i) => i);
+    const find = (x) => {
+      while (ufParent[x] !== x) {
+        ufParent[x] = ufParent[ufParent[x]];
+        x = ufParent[x];
+      }
+      return x;
+    };
+
+    const deg = new Uint8Array(n);
+    const adj = Array.from({ length: n }, () => []);
+    let edgesUsed = 0;
+
+    for (let i = 0; i < candEdges.length; i++) {
+      const { a, b } = candEdges[i];
+      if (deg[a] >= 2 || deg[b] >= 2) continue;
+      const ra = find(a), rb = find(b);
+      if (ra === rb) continue;
+      ufParent[ra] = rb;
+      deg[a]++;
+      deg[b]++;
+      adj[a].push(b);
+      adj[b].push(a);
+      edgesUsed++;
+      if (edgesUsed === n - 1) break;
+    }
+
+    // connect any remaining disconnected chain fragments via closest degree-<2 endpoints
+    while (edgesUsed < n - 1) {
+      const ends = [];
+      for (let i = 0; i < n; i++) {
+        if (deg[i] < 2) ends.push(i);
+      }
+      let bestD = Infinity, bestU = -1, bestV = -1;
+      for (let i = 0; i < ends.length; i++) {
+        const u = ends[i];
+        const ru = find(u);
+        for (let j = i + 1; j < ends.length; j++) {
+          const v = ends[j];
+          if (ru !== find(v)) {
+            const dist = distMat[u * n + v];
+            if (dist < bestD) {
+              bestD = dist;
+              bestU = u;
+              bestV = v;
+            }
           }
         }
       }
-      return { node: best, prev: prev };
-    };
+      if (bestU === -1) break;
+      ufParent[find(bestU)] = find(bestV);
+      deg[bestU]++;
+      deg[bestV]++;
+      adj[bestU].push(bestV);
+      adj[bestV].push(bestU);
+      edgesUsed++;
+    }
 
-    const endA = farthest(0).node;
-    const { node: endB, prev: prevB } = farthest(endA);
-
-    const onSpine = new Set();
-    for (let curr = endB; curr !== -1; curr = prevB[curr]) onSpine.add(curr);
+    let start = 0;
+    for (let i = 0; i < n; i++) {
+      if (deg[i] === 1) {
+        start = i;
+        break;
+      }
+    }
 
     const ordered = [];
-    const visited = new Uint8Array(n);
-    const dfs = (u) => {
-      visited[u] = 1;
-      ordered.push(points[u]);
-      const neighbors = adj[u].slice().sort((a, b) => {
-        const sa = onSpine.has(a[0]) ? 1 : 0;
-        const sb = onSpine.has(b[0]) ? 1 : 0;
-        return sa !== sb ? sa - sb : a[1] - b[1];
-      });
-      for (const [v] of neighbors) {
-        if (!visited[v]) dfs(v);
-      }
-    };
-    dfs(endA);
+    let prev = -1;
+    let curr = start;
+    while (curr !== -1) {
+      ordered.push(points[curr]);
+      const nbrs = adj[curr];
+      const next = nbrs[0] !== prev ? nbrs[0] : (nbrs.length > 1 ? nbrs[1] : -1);
+      prev = curr;
+      curr = next !== undefined ? next : -1;
+    }
     return ordered;
   }
 
@@ -1190,7 +1505,19 @@
       const scaleName = dominantScale(points);
       const looseMatches = points.filter((p) => p.distance > COLOUR_DISTANCE).length;
       drawPreview(workCanvas, points, crop);
-      const ordered = orderPoints(points);
+      const ordered = orderPoints(points, imageData);
+
+      // orient track from tropical/lower-latitude origin toward higher-latitude/extratropical end
+      if (ordered.length >= 2) {
+        const ll0 = cropToLatLon(crop, ordered[0].x, ordered[0].y, workCanvas.width, workCanvas.height);
+        const ll1 = cropToLatLon(crop, ordered[ordered.length - 1].x, ordered[ordered.length - 1].y, workCanvas.width, workCanvas.height);
+        const startIsTri = ordered[0].stage === "Extratropical cyclone";
+        const endIsTri = ordered[ordered.length - 1].stage === "Extratropical cyclone";
+        if ((startIsTri && !endIsTri) || (startIsTri === endIsTri && Math.abs(ll0.lat) > Math.abs(ll1.lat) + 5)) {
+          ordered.reverse();
+        }
+      }
+
       const name = (document.getElementById("image-storm-name").value || "").trim() || "Imported Storm";
 
       const data = ordered.map((p) => {
