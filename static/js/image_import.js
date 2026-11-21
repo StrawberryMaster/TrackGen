@@ -762,6 +762,7 @@
           x: x, y: y, r: mr, g: mg, b: mb,
           spread: spread,
           stdIn: stdIn,
+          dist: dist,
           score: dist + stdIn * 2.5 - Math.min(50, contrast * 0.1)
         });
       }
@@ -901,7 +902,7 @@
         res.aspect >= 0.65 && res.aspect <= 1.6;
 
       if (!isCompact) {
-        if (c.stdIn > 8.5) continue; // skip noisy edge/bridge seeds between overlapping dots
+        if (c.stdIn > (c.dist < 25 ? 12.5 : 8.5)) continue;
         const sameNeighbors = [];
         for (let j = 0; j < picked.length; j++) {
           if (j === idxC) continue;
@@ -909,7 +910,7 @@
           const dx = q.x - c.x, dy = q.y - c.y;
           if (dx * dx + dy * dy > neighborSearch2) continue;
           const cd2 = (q.r - c.r) * (q.r - c.r) + (q.g - c.g) * (q.g - c.g) + (q.b - c.b) * (q.b - c.b);
-          if (cd2 < 55 * 55 && (q.stdIn <= 8.5 || q.score <= c.score + 10)) {
+          if (cd2 < 55 * 55 && (q.stdIn <= 10 || q.score <= c.score + 10)) {
             sameNeighbors.push(q);
           }
         }
@@ -1063,7 +1064,9 @@
       for (const q of points) {
         const dx = q.x - p.x, dy = q.y - p.y;
         const cd2 = (q.mr - p.mr) * (q.mr - p.mr) + (q.mg - p.mg) * (q.mg - p.mg) + (q.mb - p.mb) * (q.mb - p.mb);
-        const minSep = cd2 < 45 * 45 ? 0.65 * Math.max(q.dim, p.dim) : 0.35 * Math.min(q.dim, p.dim);
+        const minSep = cd2 < 45 * 45
+          ? Math.min(r * 1.05, 0.52 * Math.max(q.dim, p.dim))
+          : 0.35 * Math.min(q.dim, p.dim);
         if (dx * dx + dy * dy < minSep * minSep) {
           dup = true;
           break;
@@ -1146,8 +1149,8 @@
     return cluster;
   }
 
-  // reconstruct track sequence using connector-line evidence, skip checks,
-  // colour continuity, and degree-<=2 greedy path merging (handles self-crossings & loops)
+  // reconstruct track sequence using connector-line evidence, crossing-aware skip checks,
+  // colour continuity, degree-<=2 path merging, and local 2-opt polish
   function orderPoints(points, imageData) {
     const n = points.length;
     if (n < 3) return points.slice();
@@ -1197,13 +1200,18 @@
 
     // pairwise distances
     const distMat = new Float64Array(n * n);
+    const nn1 = new Float64Array(n).fill(Infinity);
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         const dist = Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y);
         distMat[i * n + j] = dist;
         distMat[j * n + i] = dist;
+        if (dist < nn1[i]) nn1[i] = dist;
+        if (dist < nn1[j]) nn1[j] = dist;
       }
     }
+    const nnSorted = Array.from(nn1).sort((a, b) => a - b);
+    const medNN = nnSorted[n >> 1] || 10;
 
     // build EMST first to detect whether the image renders white track connector lines
     const inTree = new Uint8Array(n);
@@ -1234,6 +1242,72 @@
     emstLines.sort((a, b) => a - b);
     const hasWhiteLines = emstLines.length >= 3 && emstLines[emstLines.length >> 1] >= 0.55;
 
+    const edgeCache = new Map();
+    const evalEdge = (u, v) => {
+      const a = u < v ? u : v;
+      const b = u < v ? v : u;
+      const key = a * n + b;
+      let cached = edgeCache.get(key);
+      if (cached) return cached;
+
+      const dist = distMat[key];
+      const { lf, gap } = segLineScore(a, b);
+
+      let skipsSameStrand = false;
+      let crossesOtherStrand = false;
+      const maxEndpointDim = Math.max(points[a].dim, points[b].dim);
+      if (dist > maxEndpointDim * 1.2) {
+        const abx = points[b].x - points[a].x;
+        const aby = points[b].y - points[a].y;
+        const ab2 = abx * abx + aby * aby;
+        if (ab2 > 1e-6) {
+          for (let m = 0; m < n; m++) {
+            if (m === a || m === b) continue;
+            const t = ((points[m].x - points[a].x) * abx + (points[m].y - points[a].y) * aby) / ab2;
+            if (t > 0.15 && t < 0.85) {
+              const px = points[a].x + t * abx;
+              const py = points[a].y + t * aby;
+              const pdist = Math.hypot(points[m].x - px, points[m].y - py);
+              if (pdist < Math.max(2.5, 0.45 * points[m].dim)) {
+                const cdAB = Math.hypot(points[a].mr - points[b].mr, points[a].mg - points[b].mg, points[a].mb - points[b].mb);
+                const cdAM = Math.hypot(points[a].mr - points[m].mr, points[a].mg - points[m].mg, points[a].mb - points[m].mb);
+                const cdBM = Math.hypot(points[b].mr - points[m].mr, points[b].mg - points[m].mg, points[b].mb - points[m].mb);
+                if (cdAB < 65 && Math.min(cdAM, cdBM) > 110) {
+                  crossesOtherStrand = true;
+                } else {
+                  skipsSameStrand = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const cdist = Math.hypot(
+        points[a].mr - points[b].mr,
+        points[a].mg - points[b].mg,
+        points[a].mb - points[b].mb
+      );
+
+      let mult = 1.0;
+      if (gap > 2.5 && d) {
+        if (lf >= 0.65) mult *= 0.35;
+        else if (lf >= 0.40) mult *= 0.75;
+        else if (hasWhiteLines) mult *= 5.0;
+      }
+      if (skipsSameStrand) {
+        mult *= (gap > 2.5 && lf >= 0.65) ? 2.0 : 5.5;
+      } else if (crossesOtherStrand) {
+        mult *= 1.3;
+      }
+      mult *= 1.0 + 0.5 * Math.min(1.0, cdist / 120.0);
+
+      cached = { cost: dist * mult, lf, gap };
+      edgeCache.set(key, cached);
+      return cached;
+    };
+
     // evaluate k-nearest candidate edges
     const kNbrs = Math.min(n - 1, 15);
     const seenPairs = new Set();
@@ -1250,52 +1324,7 @@
         const key = a * n + b;
         if (seenPairs.has(key)) continue;
         seenPairs.add(key);
-
-        const dist = distMat[key];
-        const { lf, gap } = segLineScore(a, b);
-
-        // check if segment skips directly through a third intermediate marker
-        let skips = false;
-        const maxEndpointDim = Math.max(points[a].dim, points[b].dim);
-        if (dist > maxEndpointDim * 1.2) {
-          const abx = points[b].x - points[a].x;
-          const aby = points[b].y - points[a].y;
-          const ab2 = abx * abx + aby * aby;
-          if (ab2 > 1e-6) {
-            for (let m = 0; m < n; m++) {
-              if (m === a || m === b) continue;
-              const t = ((points[m].x - points[a].x) * abx + (points[m].y - points[a].y) * aby) / ab2;
-              if (t > 0.15 && t < 0.85) {
-                const px = points[a].x + t * abx;
-                const py = points[a].y + t * aby;
-                const pdist = Math.hypot(points[m].x - px, points[m].y - py);
-                if (pdist < Math.max(2.5, 0.45 * points[m].dim)) {
-                  skips = true;
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        const cdist = Math.hypot(
-          points[a].mr - points[b].mr,
-          points[a].mg - points[b].mg,
-          points[a].mb - points[b].mb
-        );
-
-        let mult = 1.0;
-        if (gap > 2.5 && d) {
-          if (lf >= 0.65) mult *= 0.35;
-          else if (lf >= 0.40) mult *= 0.75;
-          else if (hasWhiteLines) mult *= 5.0;
-        }
-        if (skips) {
-          mult *= (gap > 2.5 && lf >= 0.65) ? 2.0 : 5.5;
-        }
-        mult *= 1.0 + 0.5 * Math.min(1.0, cdist / 120.0);
-
-        candEdges.push({ cost: dist * mult, a, b });
+        candEdges.push({ cost: evalEdge(a, b).cost, a, b });
       }
     }
 
@@ -1368,17 +1397,73 @@
       }
     }
 
-    const ordered = [];
+    const path = [];
     let prev = -1;
     let curr = start;
     while (curr !== -1) {
-      ordered.push(points[curr]);
+      path.push(curr);
       const nbrs = adj[curr];
       const next = nbrs[0] !== prev ? nbrs[0] : (nbrs.length > 1 ? nbrs[1] : -1);
       prev = curr;
       curr = next !== undefined ? next : -1;
     }
-    return ordered;
+
+    // local 2-opt polish: untangle tight cluster fold-backs without breaking strong white-line edges
+    const turnPenalty = (idxA, idxB, idxC) => {
+      if (idxA < 0 || idxC < 0) return 0;
+      const a = points[idxA], b = points[idxB], c = points[idxC];
+      const v1x = b.x - a.x, v1y = b.y - a.y;
+      const v2x = c.x - b.x, v2y = c.y - b.y;
+      const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+      if (l1 < 1e-6 || l2 < 1e-6) return 0;
+      const cosA = (v1x * v2x + v1y * v2y) / (l1 * l2);
+      return cosA < -0.35 ? 10.0 * (-cosA - 0.35) : 0;
+    };
+
+    const maxLocalDist = medNN * 6.0;
+    let improved = true;
+    for (let pass = 0; pass < 6 && improved; pass++) {
+      improved = false;
+      for (let i = 0; i < path.length - 3; i++) {
+        const a = path[i], b = path[i + 1];
+        const eAB = evalEdge(a, b);
+        const strongAB = d && eAB.gap > 2.5 && eAB.lf >= 0.75;
+        for (let j = i + 2; j < path.length - 1; j++) {
+          const c = path[j], dNode = path[j + 1];
+          if (distMat[a * n + c] > maxLocalDist && distMat[b * n + dNode] > maxLocalDist) continue;
+          const eCD = evalEdge(c, dNode);
+          const strongCD = d && eCD.gap > 2.5 && eCD.lf >= 0.75;
+          const eAC = evalEdge(a, c);
+          const eBD = evalEdge(b, dNode);
+          if (strongAB && !(d && eAC.gap > 2.5 && eAC.lf >= 0.75)) continue;
+          if (strongCD && !(d && eBD.gap > 2.5 && eBD.lf >= 0.75)) continue;
+
+          const before = eAB.cost + eCD.cost +
+            turnPenalty(i > 0 ? path[i - 1] : -1, a, b) +
+            turnPenalty(a, b, path[i + 2]) +
+            turnPenalty(path[j - 1], c, dNode) +
+            turnPenalty(c, dNode, j + 2 < path.length ? path[j + 2] : -1);
+
+          const after = eAC.cost + eBD.cost +
+            turnPenalty(i > 0 ? path[i - 1] : -1, a, c) +
+            turnPenalty(a, c, path[j - 1]) +
+            turnPenalty(path[i + 2], b, dNode) +
+            turnPenalty(b, dNode, j + 2 < path.length ? path[j + 2] : -1);
+
+          if (after + 0.5 < before) {
+            for (let l = i + 1, rIdx = j; l < rIdx; l++, rIdx--) {
+              const tmp = path[l];
+              path[l] = path[rIdx];
+              path[rIdx] = tmp;
+            }
+            improved = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return path.map((idx) => points[idx]);
   }
 
   function representativeSpeed(cat, scaleName) {
