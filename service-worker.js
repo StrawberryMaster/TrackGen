@@ -1,5 +1,5 @@
 const appPrefix = 'TrackGen';
-const appVersion = 'v1.0.9';
+const appVersion = 'v1.1.0';
 const cacheName = `${appPrefix}-${appVersion}`;
 
 // static list of files to cache
@@ -25,6 +25,7 @@ const filesToCache = [
     './static/js/manual_input.js',
     './static/js/export.js',
     './static/js/export-hurdat.js',
+    './static/js/image_import.js',
     
     // media (exclude large maps)
     './static/media/favicon.png',

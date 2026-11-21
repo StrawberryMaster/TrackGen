@@ -481,6 +481,159 @@ ion-icon+span {
 	margin-top: 0;
 }
 
+#options-container fieldset#image-import-section {
+	flex: 1 1 100%;
+	min-width: 280px;
+	order: 3;
+	margin-top: 0;
+}
+
+/* drop / paste target */
+#image-drop-zone {
+	align-items: center;
+	background: rgba(255, 255, 255, .35);
+	border: 2px dashed var(--foreground-2);
+	border-radius: .6rem;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	gap: .35rem;
+	justify-content: center;
+	min-height: 9rem;
+	padding: 1rem;
+	position: relative;
+	text-align: center;
+	transition: background .2s, border-color .2s, transform .2s;
+}
+
+#image-drop-zone:hover,
+#image-drop-zone:focus-visible,
+#image-drop-zone.drag-over {
+	background: rgba(255, 255, 255, .6);
+	border-color: var(--foreground-1);
+	outline: none;
+}
+
+#image-drop-zone.drag-over {
+	transform: scale(1.01);
+}
+
+#image-drop-prompt {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: .25rem;
+}
+
+#image-drop-prompt.hidden {
+	display: none;
+}
+
+#image-drop-prompt ion-icon {
+	font-size: 30px;
+	color: var(--foreground-2);
+}
+
+#image-drop-prompt strong {
+	font-size: 1rem;
+	color: var(--foreground-2);
+}
+
+#image-drop-prompt span {
+	font-size: .85em;
+	opacity: .85;
+}
+
+#image-choose-file {
+	background-color: var(--foreground-2);
+	border: none;
+	border-radius: .25rem;
+	color: #fff;
+	cursor: pointer;
+	font-family: 'Fira Sans', sans-serif;
+	margin-top: .4rem;
+	padding: .35rem .8rem;
+	transition: background-color .2s;
+}
+
+#image-choose-file:hover {
+	background-color: var(--background-3);
+}
+
+#image-thumb {
+	max-height: 10rem;
+	max-width: 100%;
+	object-fit: contain;
+	border-radius: .3rem;
+}
+
+#image-file-name {
+	font-family: 'Roboto Mono', monospace;
+	font-size: .8em;
+	opacity: .85;
+	word-break: break-all;
+}
+
+#image-import-controls {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: .5rem;
+	margin-top: .75rem;
+}
+
+#image-import-section #image-storm-name {
+	border: 1px solid #ccc;
+	border-radius: .25rem;
+	padding: .35rem;
+	font-family: 'Roboto Mono', monospace;
+	background-color: #fff;
+	color: #000;
+	flex: 1 1 10rem;
+	min-width: 8rem;
+}
+
+#import-from-image {
+	background-color: var(--foreground-2);
+	color: #fff;
+	border: none;
+	border-radius: .25rem;
+	padding: .5rem 1rem;
+	cursor: pointer;
+	font-family: 'Fira Sans', sans-serif;
+	transition: background-color .2s;
+	white-space: nowrap;
+}
+
+#import-from-image:hover:not(:disabled) {
+	background-color: color-mix(in srgb, var(--foreground-2) 80%, #000);
+}
+
+#import-from-image:disabled {
+	opacity: .6;
+	cursor: wait;
+}
+
+#image-import-status {
+	font-size: .9em;
+	white-space: normal;
+	line-height: 1.4;
+	margin-top: .5rem;
+}
+
+#image-import-preview {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin-top: .5rem;
+	border-radius: .25rem;
+	border: 1px solid rgba(255, 255, 255, .35);
+}
+
+#image-import-preview.hidden {
+	display: none;
+}
+
 #options-container fieldset {
 	border: 1px solid var(--foreground-1);
 	border-radius: .5rem;
@@ -1230,5 +1383,15 @@ ion-icon+span {
 
 	#custom-bounds-inputs {
 		background-color: rgba(0, 0, 0, 0.15);
+	}
+
+	#image-drop-zone {
+		background-color: rgba(0, 0, 0, .18);
+	}
+
+	#image-drop-zone:hover,
+	#image-drop-zone:focus-visible,
+	#image-drop-zone.drag-over {
+		background-color: rgba(0, 0, 0, .32);
 	}
 }
