@@ -254,8 +254,150 @@
     return g;
   }
 
+  // mask out white basin/track lines and vivid markers
+  // so georeferencing locks onto coastlines/land
+  function cleanAlignmentCanvas(workCanvas) {
+    const w = workCanvas.width, h = workCanvas.height;
+    const clean = document.createElement("canvas");
+    clean.width = w;
+    clean.height = h;
+    const cctx = clean.getContext("2d", { willReadFrequently: true });
+    cctx.drawImage(workCanvas, 0, 0);
+    const imgData = cctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+
+    const rawMask = new Uint8Array(w * h);
+    for (let i = 0, p = 0; i < rawMask.length; i++, p += 4) {
+      const r = d[p], g = d[p + 1], b = d[p + 2];
+      const mn = Math.min(r, g, b), mx = Math.max(r, g, b);
+      const spread = mx - mn;
+      const isWhiteLine = mn >= 195 && spread <= 35;
+      const isVividMarker = mx >= 150 && (spread >= 95 || (b > r + 35 && g > 140));
+      if (isWhiteLine || isVividMarker) rawMask[i] = 1;
+    }
+
+    // dilate by 2px so anti-aliased rims around lines/markers don't bleed into resizedGray
+    const mask = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!rawMask[y * w + x]) continue;
+        for (let dy = -2; dy <= 2; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = x + dx;
+            if (nx >= 0 && nx < w) mask[ny * w + nx] = 1;
+          }
+        }
+      }
+    }
+
+    const out = new Uint8ClampedArray(d);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!mask[y * w + x]) continue;
+        let sr = 0, sg = 0, sb = 0, cnt = 0;
+        for (let dist = 1; dist <= 25 && !cnt; dist += 2) {
+          const dirs = [[dist, 0], [-dist, 0], [0, dist], [0, -dist]];
+          for (let k = 0; k < 4; k++) {
+            const nx = x + dirs[k][0], ny = y + dirs[k][1];
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !mask[ny * w + nx]) {
+              const np = (ny * w + nx) * 4;
+              sr += d[np]; sg += d[np + 1]; sb += d[np + 2];
+              cnt++;
+            }
+          }
+        }
+        const p = (y * w + x) * 4;
+        if (cnt > 0) {
+          out[p] = Math.round(sr / cnt);
+          out[p + 1] = Math.round(sg / cnt);
+          out[p + 2] = Math.round(sb / cnt);
+        } else {
+          out[p] = 11; out[p + 1] = 10; out[p + 2] = 50;
+        }
+      }
+    }
+
+    imgData.data.set(out);
+    cctx.putImageData(imgData, 0, 0);
+    return clean;
+  }
+
+  // sample normalized (u, v) probe positions weighted toward land/coastline features
+  // so small islands (e.g. Hawaii) pin the scale just as strongly as large landmasses
+  function buildFeatureProbeUVs(canvas, points) {
+    const w = canvas.width, h = canvas.height;
+    const d = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+
+    // estimate dominant background color (ocean) via median of a coarse grid
+    const rs = [], gs = [], bs = [];
+    for (let iy = 0; iy < 9; iy++) {
+      const y = Math.min(h - 1, Math.floor((iy + 0.5) * h / 9));
+      for (let ix = 0; ix < 11; ix++) {
+        const x = Math.min(w - 1, Math.floor((ix + 0.5) * w / 11));
+        const p = (y * w + x) * 4;
+        rs.push(d[p]); gs.push(d[p + 1]); bs.push(d[p + 2]);
+      }
+    }
+    rs.sort((a, b) => a - b); gs.sort((a, b) => a - b); bs.sort((a, b) => a - b);
+    const mid = rs.length >> 1;
+    const bgR = rs[mid], bgG = gs[mid], bgB = bs[mid];
+
+    const gxN = 44, gyN = 30;
+    const featUV = [], bgUV = [];
+
+    for (let gy = 0; gy < gyN; gy++) {
+      const y0 = Math.floor(gy * h / gyN);
+      const y1 = Math.max(y0 + 1, Math.floor((gy + 1) * h / gyN));
+      for (let gx = 0; gx < gxN; gx++) {
+        const x0 = Math.floor(gx * w / gxN);
+        const x1 = Math.max(x0 + 1, Math.floor((gx + 1) * w / gxN));
+
+        let bestDiff = -1, bestX = (x0 + x1) >> 1, bestY = (y0 + y1) >> 1;
+        for (let sy = 0; sy < 4; sy++) {
+          const py = Math.min(h - 1, y0 + Math.floor((sy + 0.5) * (y1 - y0) / 4));
+          for (let sx = 0; sx < 4; sx++) {
+            const px = Math.min(w - 1, x0 + Math.floor((sx + 0.5) * (x1 - x0) / 4));
+            if (points && points.some((pt) => Math.hypot(px - pt.x, py - pt.y) <= pt.dim * 1.25)) continue;
+            const p = (py * w + px) * 4;
+            const diff = Math.abs(d[p] - bgR) + Math.abs(d[p + 1] - bgG) + Math.abs(d[p + 2] - bgB);
+            if (diff > bestDiff) {
+              bestDiff = diff;
+              bestX = px;
+              bestY = py;
+            }
+          }
+        }
+
+        if (bestDiff > 28) {
+          featUV.push([bestX / w, bestY / h]);
+        } else if ((gx + gy) % 3 === 0) {
+          bgUV.push([((x0 + x1) * 0.5) / w, ((y0 + y1) * 0.5) / h]);
+        }
+      }
+    }
+
+    // fallback to uniform probes if feature set is too small
+    if (featUV.length < 15) return null;
+    return featUV.concat(bgUV);
+  }
+
+  function probesFromUVs(uvs, w, h) {
+    if (!uvs) return makeProbes(w, h, 36, 26);
+    const px = new Int32Array(uvs.length);
+    const py = new Int32Array(uvs.length);
+    for (let k = 0; k < uvs.length; k++) {
+      px[k] = Math.min(w - 1, Math.max(0, Math.floor(uvs[k][0] * w)));
+      py[k] = Math.min(h - 1, Math.max(0, Math.floor(uvs[k][1] * h)));
+    }
+    return { px, py, n: uvs.length };
+  }
+
   // georeferencing (supports crops crossing ±180° antimeridian)
   function findCrop(workCanvas) {
+    const alignCanvas = cleanAlignmentCanvas(workCanvas);
+    const featUVs = buildFeatureProbeUVs(alignCanvas, null);
     const aspect = workCanvas.width / workCanvas.height;
     const ref = refCoarse;
     const maxW = Math.min(ref.w, ref.h * aspect);
@@ -263,30 +405,60 @@
     for (let w = 16; w <= maxW * 1.02; w *= 1.12) scales.push(Math.max(8, Math.round(w)));
     if (scales[scales.length - 1] !== Math.round(maxW)) scales.push(Math.round(maxW));
 
-    let best = { score: -Infinity, x: 0, y: 0, w: scales[0], h: Math.round(scales[0] / aspect) };
+    const coarseByScale = [];
 
-    // coarse pass over every candidate zoom / position (wrapping horizontally across ±180°)
+    // coarse pass: keep the best position per scale so tiny scales can't hide the true zoom
     for (const candidate of scales) {
       const w = Math.min(candidate, ref.w);
       const h = Math.max(8, Math.min(ref.h, Math.round(w / aspect)));
-      const g = resizedGray(workCanvas, w, h);
+      const g = resizedGray(alignCanvas, w, h);
       const q = wrapGray(g, w, h);
-      const probes = makeProbes(w, h, 16, 12);
+      const probes = makeProbes(w, h, 20, 15);
       const stats = probeStats(q, probes);
+      const step = w < 140 ? 2 : 4;
 
-      for (let oy = 0; oy + h <= ref.h; oy += 4) {
-        for (let ox = 0; ox < ref.w; ox += 4) {
+      let scaleBest = { score: -Infinity, x: 0, y: 0, w, h };
+      for (let oy = 0; oy + h <= ref.h; oy += step) {
+        for (let ox = 0; ox < ref.w; ox += step) {
           const score = nccAt(q, stats, probes, ref, ox, oy, true);
-          if (score > best.score) {
-            best = { score, x: ox, y: oy, w, h };
+          if (score > scaleBest.score) {
+            scaleBest = { score, x: ox, y: oy, w, h };
+          }
+        }
+      }
+      if (Number.isFinite(scaleBest.score)) coarseByScale.push(scaleBest);
+    }
+
+    coarseByScale.sort((a, b) => b.score - a.score);
+    const topCoarse = coarseByScale.slice(0, 10);
+    const bestLarge = coarseByScale.find((c) => c.w >= 36);
+    if (bestLarge && !topCoarse.includes(bestLarge)) topCoarse.push(bestLarge);
+
+    // verify top coarse scale candidates directly on refFine before full fine search
+    const fine = refFine;
+    const scaleFactor = fine.w / ref.w;
+    let best = topCoarse[0] || { score: -Infinity, x: 0, y: 0, w: scales[0], h: Math.round(scales[0] / aspect) };
+    let bestFineVerify = -Infinity;
+    for (const c of topCoarse) {
+      const fw = Math.max(16, Math.min(fine.w, Math.round(c.w * scaleFactor)));
+      const fh = Math.max(16, Math.min(fine.h, Math.round(fw / aspect)));
+      if (fh > fine.h) continue;
+      const q = wrapGray(resizedGray(alignCanvas, fw, fh), fw, fh);
+      const probes = probesFromUVs(featUVs, fw, fh);
+      const stats = probeStats(q, probes);
+      const cx = Math.round(c.x * scaleFactor), cy = Math.round(c.y * scaleFactor);
+      for (let oy = Math.max(0, cy - 16); oy <= Math.min(fine.h - fh, cy + 16); oy += 4) {
+        for (let ox = cx - 16; ox <= cx + 16; ox += 4) {
+          const score = nccAt(q, stats, probes, fine, ox, oy, true);
+          if (score > bestFineVerify) {
+            bestFineVerify = score;
+            best = { score, x: ox / scaleFactor, y: oy / scaleFactor, w: c.w, h: c.h };
           }
         }
       }
     }
 
-    // fine pass on the full resolution reference, around the coarse result
-    const fine = refFine;
-    const scaleFactor = fine.w / ref.w;
+    // fine pass on the full resolution reference, around the verified coarse result
     const baseX = best.x * scaleFactor;
     const baseY = best.y * scaleFactor;
     const baseW = best.w * scaleFactor;
@@ -298,9 +470,9 @@
       const w = Math.max(16, Math.min(fine.w, Math.round(baseW * factor)));
       const h = Math.max(16, Math.min(fine.h, Math.round(w / aspect)));
       if (w > fine.w || h > fine.h) continue;
-      const g = resizedGray(workCanvas, w, h);
+      const g = resizedGray(alignCanvas, w, h);
       const q = wrapGray(g, w, h);
-      const probes = makeProbes(w, h, 28, 20);
+      const probes = probesFromUVs(featUVs, w, h);
       const stats = probeStats(q, probes);
 
       for (let oy = Math.max(0, Math.round(baseY - radius)); oy <= Math.min(fine.h - h, Math.round(baseY + radius)); oy += 8) {
@@ -321,13 +493,13 @@
     const refineBaseW = fineBest.w;
     const refineBaseX = fineBest.x;
     const refineBaseY = fineBest.y;
-    for (const factor of [0.97, 0.985, 1, 1.015, 1.03]) {
+    for (const factor of [0.97, 0.98, 0.99, 1, 1.01, 1.02, 1.03]) {
       const w = Math.max(16, Math.min(fine.w, Math.round(refineBaseW * factor)));
       const h = Math.max(16, Math.min(fine.h, Math.round(w / aspect)));
       if (h > fine.h) continue;
-      const g = resizedGray(workCanvas, w, h);
+      const g = resizedGray(alignCanvas, w, h);
       const q = wrapGray(g, w, h);
-      const probes = makeProbes(w, h, 40, 28);
+      const probes = probesFromUVs(featUVs, w, h);
       const stats = probeStats(q, probes);
       for (let oy = Math.max(0, refineBaseY - 12); oy <= Math.min(fine.h - h, refineBaseY + 12); oy++) {
         for (let ox = refineBaseX - 12; ox <= refineBaseX + 12; ox++) {
@@ -348,7 +520,7 @@
   }
 
   function sampleCropBackground(crop, width, height) {
-    if (!refImage || crop.confidence < 0.5 || crop.w <= 0 || crop.h <= 0) return null;
+    if (!refImage || crop.confidence < 0.3 || crop.w <= 0 || crop.h <= 0) return null;
     try {
       const natW = refImage.naturalWidth;
       const natH = refImage.naturalHeight;
@@ -381,11 +553,13 @@
   function refineCrop8k(workCanvas, crop, points) {
     if (!refImage || !refImage.naturalWidth || crop.confidence < 0.25) return crop;
 
+    const alignCanvas = cleanAlignmentCanvas(workCanvas);
+    const featUVs = buildFeatureProbeUVs(alignCanvas, points);
     const natW = refImage.naturalWidth;
     const natH = refImage.naturalHeight;
     const scaleX8k = natW / refFine.w;
     const scaleY8k = natH / refFine.h;
-    const pad = 28;
+    const pad = 56;
     const rx0 = Math.floor(crop.x * scaleX8k) - pad;
     const rx1 = Math.ceil((crop.x + crop.w) * scaleX8k) + pad;
     const ry0 = Math.max(0, Math.floor(crop.y * scaleY8k) - pad);
@@ -454,14 +628,14 @@
     };
 
     let best = { score: -Infinity, ox: baseOx, oy: baseOy, w: Math.round(baseW), h: Math.round(baseW / aspect), factor: 1, q: null, stats: null, probes: null };
-    const searchRad = Math.max(10, Math.round(24 * patchScale));
+    const searchRad = Math.max(20, Math.round(44 * patchScale));
 
-    for (const factor of [0.985, 0.99, 0.995, 1, 1.005, 1.01, 1.015]) {
+    for (const factor of [0.96, 0.97, 0.98, 0.99, 1, 1.01, 1.02, 1.03, 1.04]) {
       const w = Math.max(16, Math.min(rw, Math.round(baseW * factor)));
       const h = Math.max(16, Math.min(rh, Math.round(w / aspect)));
       if (h > rh) continue;
-      const q = wrapGray(resizedGray(workCanvas, w, h), w, h);
-      const probes = filterProbes(w, h, makeProbes(w, h, 36, 26));
+      const q = wrapGray(resizedGray(alignCanvas, w, h), w, h);
+      const probes = filterProbes(w, h, probesFromUVs(featUVs, w, h));
       const stats = probeStats(q, probes);
 
       for (let oy = Math.max(0, Math.round(baseOy - searchRad)); oy <= Math.min(rh - h, Math.round(baseOy + searchRad)); oy += 2) {
@@ -477,13 +651,13 @@
     // Micro-scale polish around winning factor
     const winFactor = best.factor;
     const winOx = best.ox, winOy = best.oy;
-    for (const df of [-0.0025, 0.0025]) {
+    for (const df of [-0.005, -0.0025, 0.0025, 0.005]) {
       const f = winFactor + df;
       const w = Math.max(16, Math.min(rw, Math.round(baseW * f)));
       const h = Math.max(16, Math.min(rh, Math.round(w / aspect)));
       if (h > rh) continue;
-      const q = wrapGray(resizedGray(workCanvas, w, h), w, h);
-      const probes = filterProbes(w, h, makeProbes(w, h, 36, 26));
+      const q = wrapGray(resizedGray(alignCanvas, w, h), w, h);
+      const probes = filterProbes(w, h, probesFromUVs(featUVs, w, h));
       const stats = probeStats(q, probes);
       for (let oy = Math.max(0, winOy - 3); oy <= Math.min(rh - h, winOy + 3); oy++) {
         for (let ox = Math.max(0, winOx - 3); ox <= Math.min(rw - w, winOx + 3); ox++) {
@@ -947,6 +1121,39 @@
 
       const cx = sx / count, cy = sy / count;
 
+      // reject textured terrain patches (e.g. desert/coastlines) that lack a flat marker core
+      let coreCnt = 0;
+      const coreCheckTol2 = 18 * 18;
+      for (let i = 0; i < count; i++) {
+        const dr = pixR[i] - mr, dg = pixG[i] - mg, db = pixB[i] - mb;
+        if (dr * dr + dg * dg + db * db <= coreCheckTol2) coreCnt++;
+      }
+      const coreFrac = coreCnt / count;
+
+      const ixC = Math.min(w - 1, Math.max(0, Math.round(cx)));
+      const iyC = Math.min(h - 1, Math.max(0, Math.round(cy)));
+      let csR = 0, csG = 0, csB = 0, csR2 = 0, csG2 = 0, csB2 = 0, csN = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = iyC + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = ixC + dx;
+          if (nx < 0 || nx >= w) continue;
+          const p = (ny * w + nx) * 4;
+          const pr = d[p], pg = d[p + 1], pb = d[p + 2];
+          csR += pr; csG += pg; csB += pb;
+          csR2 += pr * pr; csG2 += pg * pg; csB2 += pb * pb;
+          csN++;
+        }
+      }
+      const cenStd = csN ? Math.sqrt(Math.max(0,
+        (csR2 - csR * csR / csN) + (csG2 - csG * csG / csN) + (csB2 - csB * csB / csN)
+      ) / (3 * csN)) : 0;
+
+      const maxCenStd = r < 3.5 ? 14 : 8.5;
+      if (cenStd > maxCenStd || coreFrac < 0.62) continue;
+      if (borderContrast < 120 && (cenStd > 5.0 || coreFrac < 0.72)) continue;
+
       // check against background (and reject static terrain like salt flats)
       let minBgDist = Infinity;
       if (bgData) {
@@ -962,6 +1169,7 @@
         }
         minBgDist = Math.sqrt(minBgDist2);
         if (minBgDist < 24 && (c.stdIn > 2 || borderContrast < 150)) continue;
+        if (minBgDist < 42 && cenStd > 2.0 && borderContrast < 180) continue;
       }
 
       // use crisp core pixels (<= 26 RGB dist from marker mean) to classify triangle vs circle vs square
@@ -1050,6 +1258,7 @@
         occluded: false,
         contrast: borderContrast,
         minBgDist: minBgDist,
+        cenStd: cenStd,
         stdIn: c.stdIn,
         lineScore: lineScore,
         seedScore: c.score
@@ -1108,7 +1317,9 @@
         const closeCnt = cluster.filter((p) => p.domDist <= COLOUR_DISTANCE).length;
         if (closeCnt >= Math.max(3, Math.ceil(cluster.length * 0.6))) {
           cluster = cluster.filter((p) =>
-            p.domDist <= 34 || (p.domDist <= 48 && p.contrast >= 130)
+            p.domDist <= 34 ||
+            (p.domDist <= 48 && p.contrast >= 130) ||
+            (p.cenStd <= 2.5 && p.contrast >= 140 && p.domDist <= 85)
           );
           cluster.forEach((p) => {
             if (p.domHit) {
@@ -1140,7 +1351,7 @@
       const isoThresh = Math.max(medDim * 7, medNN * 4.5);
       const kept = cluster.filter((p, i) => {
         if (nns[i] <= isoThresh) return true;
-        const suspect = p.stdIn > 3.5 || p.dim < medDim * 0.85 || p.contrast < 150 || p.minBgDist < 38;
+        const suspect = p.stdIn > 3.5 || p.cenStd > 2.5 || p.dim < medDim * 0.85 || p.contrast < 150 || p.minBgDist < 38;
         return !suspect;
       });
       if (kept.length >= 3) cluster = kept;
