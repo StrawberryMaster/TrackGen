@@ -254,8 +254,7 @@
     return g;
   }
 
-  // mask out white basin/track lines and vivid markers
-  // so georeferencing locks onto coastlines/land
+  // mask out white basin/track lines and vivid markers so georeferencing locks onto coastlines/land
   function cleanAlignmentCanvas(workCanvas) {
     const w = workCanvas.width, h = workCanvas.height;
     const clean = document.createElement("canvas");
@@ -857,7 +856,15 @@
     // tight inner cross stays inside small dots, triangles, and occluded circles
     const pIn = r > 14 ? 2 : 1;
     const inOffsets = [[0, 0], [pIn, 0], [-pIn, 0], [0, pIn], [0, -pIn]];
-    const step = Math.max(1, Math.min(3, Math.round(r * 0.25)));
+    const step = r <= 9 ? 1 : Math.max(1, Math.min(3, Math.round(r * 0.22)));
+
+    // interior ring checks whether the candidate is centered inside the marker rather than on its rim
+    const inR = Math.max(2, Math.round(r * 0.48));
+    const inRD = Math.max(1, Math.round(inR * 0.707));
+    const inRing = [
+      [inR, 0], [-inR, 0], [0, inR], [0, -inR],
+      [inRD, inRD], [-inRD, inRD], [inRD, -inRD], [-inRD, -inRD]
+    ];
 
     // outer rings at 1.4*r and 2.4*r verify sharp marker-to-background contrast
     const ringR1 = Math.max(3, Math.round(r * 1.4));
@@ -931,21 +938,31 @@
         );
         if (contrast < 42) continue;
 
+        let inMatch = 0;
+        for (let k = 0; k < inRing.length; k++) {
+          const ix = x + inRing[k][0], iy = y + inRing[k][1];
+          if (ix < 0 || iy < 0 || ix >= w || iy >= h) continue;
+          const p = (iy * w + ix) * 4;
+          const dr = d[p] - mr, dg = d[p + 1] - mg, db = d[p + 2] - mb;
+          if (dr * dr + dg * dg + db * db <= 32 * 32) inMatch++;
+        }
+
         const dist = Math.sqrt(hit.distance);
         candidates.push({
           x: x, y: y, r: mr, g: mg, b: mb,
           spread: spread,
           stdIn: stdIn,
+          inMatch: inMatch,
           dist: dist,
-          score: dist + stdIn * 2.5 - Math.min(50, contrast * 0.1)
+          score: dist + stdIn * 2.5 - inMatch * 4.5 - Math.min(20, contrast * 0.04)
         });
       }
     }
 
-    // colour-aware NMS: preserves closely overlapping dots of different colours
+    // colour-aware NMS: preserves closely overlapping dots of the same or different colours
     candidates.sort((a, b) => a.score - b.score);
     const picked = [];
-    const sameSep2 = Math.pow(Math.max(4, r * 0.9), 2);
+    const sameSep2 = Math.pow(Math.max(3.5, r * 0.80), 2);
     const diffSep2 = Math.pow(Math.max(3, r * 0.45), 2);
     for (const c of candidates) {
       if (picked.length >= 2000) break;
@@ -972,6 +989,7 @@
     const neighborSearch2 = Math.pow(r * 3.2, 2);
     const bgRad = Math.max(6, Math.round(r));
     const bgStep = Math.max(1, Math.round(bgRad / 4));
+    const minBoundedInMatch = r >= 4.5 ? 5 : 3;
 
     const runFlood = (c, bounded, sameNeighbors) => {
       const x0 = Math.max(0, c.x - half), x1 = Math.min(w - 1, c.x + half);
@@ -1077,6 +1095,7 @@
 
       if (!isCompact) {
         if (c.stdIn > (c.dist < 25 ? 12.5 : 8.5)) continue;
+        if (c.inMatch < minBoundedInMatch) continue;
         const sameNeighbors = [];
         for (let j = 0; j < picked.length; j++) {
           if (j === idxC) continue;
@@ -1084,18 +1103,19 @@
           const dx = q.x - c.x, dy = q.y - c.y;
           if (dx * dx + dy * dy > neighborSearch2) continue;
           const cd2 = (q.r - c.r) * (q.r - c.r) + (q.g - c.g) * (q.g - c.g) + (q.b - c.b) * (q.b - c.b);
-          if (cd2 < 55 * 55 && (q.stdIn <= 10 || q.score <= c.score + 10)) {
+          if (cd2 < 55 * 55 && (q.inMatch >= minBoundedInMatch || q.score <= c.score + 10)) {
             sameNeighbors.push(q);
           }
         }
         res = runFlood(c, true, sameNeighbors);
         if (!res || res.count < 7) continue;
-        if (res.fill < 0.44 || res.aspect < 0.55 || res.aspect > 1.85) continue;
+        if (res.fill < 0.44 || res.aspect < 0.28 || res.aspect > 3.5) continue;
+        if ((res.aspect < 0.55 || res.aspect > 1.85) && c.stdIn > 6.0) continue;
         usedBounded = true;
       }
 
       const {
-        x0, y0, rw, pixLX, pixLY, pixR, pixG, pixB,
+        x0, y0, rw, rh, pixLX, pixLY, pixR, pixG, pixB,
         count, sx, sy, sr, sg, sb,
         minX, maxX, minY, maxY, maxDim, fill
       } = res;
@@ -1261,7 +1281,8 @@
         cenStd: cenStd,
         stdIn: c.stdIn,
         lineScore: lineScore,
-        seedScore: c.score
+        seedScore: c.score,
+        _geom: { x0, y0, rw, rh, pixLX, pixLY }
       });
     }
 
@@ -1274,7 +1295,7 @@
         const dx = q.x - p.x, dy = q.y - p.y;
         const cd2 = (q.mr - p.mr) * (q.mr - p.mr) + (q.mg - p.mg) * (q.mg - p.mg) + (q.mb - p.mb) * (q.mb - p.mb);
         const minSep = cd2 < 45 * 45
-          ? Math.min(r * 1.05, 0.52 * Math.max(q.dim, p.dim))
+          ? Math.min(r * 0.80, 0.45 * Math.max(q.dim, p.dim))
           : 0.35 * Math.min(q.dim, p.dim);
         if (dx * dx + dy * dy < minSep * minSep) {
           dup = true;
@@ -1297,6 +1318,85 @@
         }
       }
     }
+
+    // refine centers of non-Voronoi circular dots occluded by a different-colour neighbor
+    const unoccCircleDims = points
+      .filter((p) => !p.isTriangle && p.stage === "Tropical cyclone" && !p.occluded && !p.usedBounded)
+      .map((p) => p.dim)
+      .sort((a, b) => a - b);
+    const refDiam = unoccCircleDims.length ? unoccCircleDims[unoccCircleDims.length >> 1] : 2 * r;
+    const perimR = Math.max(1.5, (refDiam - 1) * 0.5);
+
+    for (const p of points) {
+      if (p.isTriangle || p.stage !== "Tropical cyclone" || p.usedBounded || !p._geom) continue;
+      const diffNbrs = points.filter((q) => {
+        if (q === p) return false;
+        const cd2 = (q.mr - p.mr) * (q.mr - p.mr) + (q.mg - p.mg) * (q.mg - p.mg) + (q.mb - p.mb) * (q.mb - p.mb);
+        return cd2 >= 45 * 45 && Math.hypot(q.x - p.x, q.y - p.y) < refDiam * 1.15;
+      });
+      if (!diffNbrs.length) continue;
+
+      const { x0, y0, rw, rh, pixLX, pixLY } = p._geom;
+      const inComp = new Uint8Array(rw * rh);
+      for (let i = 0; i < pixLX.length; i++) inComp[pixLY[i] * rw + pixLX[i]] = 1;
+
+      const arcX = [], arcY = [];
+      const dirs4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let i = 0; i < pixLX.length; i++) {
+        const lx = pixLX[i], ly = pixLY[i];
+        const gx = x0 + lx, gy = y0 + ly;
+        let isOuterArc = false;
+        for (let k = 0; k < 4; k++) {
+          const nlx = lx + dirs4[k][0], nly = ly + dirs4[k][1];
+          if (nlx >= 0 && nlx < rw && nly >= 0 && nly < rh && inComp[nly * rw + nlx]) continue;
+          const ox = Math.min(w - 1, Math.max(0, gx + dirs4[k][0] * 2));
+          const oy = Math.min(h - 1, Math.max(0, gy + dirs4[k][1] * 2));
+          const op = (oy * w + ox) * 4;
+          const nr = d[op], ng = d[op + 1], nb = d[op + 2];
+          if (Math.min(nr, ng, nb) >= 195 && Math.max(nr, ng, nb) - Math.min(nr, ng, nb) <= 35) continue;
+          const dp2 = (nr - p.mr) * (nr - p.mr) + (ng - p.mg) * (ng - p.mg) + (nb - p.mb) * (nb - p.mb);
+          if (dp2 <= 42 * 42) continue;
+          const touchesNbr = diffNbrs.some((q) => {
+            const dq2 = (nr - q.mr) * (nr - q.mr) + (ng - q.mg) * (ng - q.mg) + (nb - q.mb) * (nb - q.mb);
+            return dq2 <= 45 * 45;
+          });
+          if (!touchesNbr) {
+            isOuterArc = true;
+            break;
+          }
+        }
+        if (isOuterArc) {
+          arcX.push(gx);
+          arcY.push(gy);
+        }
+      }
+
+      if (arcX.length >= 8) {
+        let cxFit = p.x, cyFit = p.y;
+        for (let iter = 0; iter < 12; iter++) {
+          let gxSum = 0, gySum = 0;
+          for (let i = 0; i < arcX.length; i++) {
+            const dx = cxFit - arcX[i], dy = cyFit - arcY[i];
+            const dist = Math.hypot(dx, dy);
+            if (dist < 1e-3) continue;
+            const err = dist - perimR;
+            gxSum += (err * dx) / dist;
+            gySum += (err * dy) / dist;
+          }
+          const stepX = (gxSum / arcX.length) + 0.15 * (cxFit - p.x);
+          const stepY = (gySum / arcY.length) + 0.15 * (cyFit - p.y);
+          cxFit -= 0.7 * stepX;
+          cyFit -= 0.7 * stepY;
+        }
+        const shift = Math.hypot(cxFit - p.x, cyFit - p.y);
+        if (shift <= perimR * 0.65) {
+          p.x = cxFit;
+          p.y = cyFit;
+        }
+      }
+      delete p._geom;
+    }
+    points.forEach((p) => { delete p._geom; });
 
     // reject unoccluded irregular low-fill blobs that are neither triangles nor circles/squares
     const validShape = points.filter((p) =>
@@ -1628,7 +1728,7 @@
       const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
       if (l1 < 1e-6 || l2 < 1e-6) return 0;
       const cosA = (v1x * v2x + v1y * v2y) / (l1 * l2);
-      return cosA < -0.35 ? 10.0 * (-cosA - 0.35) : 0;
+      return (cosA < 0.2 ? 2.5 * (0.2 - cosA) : 0) + (cosA < -0.35 ? 10.0 * (-0.35 - cosA) : 0);
     };
 
     const maxLocalDist = medNN * 6.0;
